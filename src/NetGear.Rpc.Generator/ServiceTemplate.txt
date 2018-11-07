@@ -1,0 +1,33 @@
+﻿using System;
+using System.Net;
+using System.Collections;
+using System.Collections.Generic;
+
+namespace {0}
+{{
+	public class {1} : {2}
+	{{
+		ulong _serviceHash;
+		{3} _client;
+
+		public {4}(IPEndPoint endPoint)
+		{{
+			_client = new {5}(typeof({6}), endPoint);
+			_serviceHash = CalculateHash(typeof({7}).FullName);
+		}}
+
+		{8}
+		private ulong CalculateHash(string str)
+		{{
+			var hashedValue = 3074457345618258791ul;
+			for (var i = 0; i < str.Length; i++)
+			{{
+				hashedValue += str[i];
+				hashedValue *= 3074457345618258799ul;
+			}}
+			return hashedValue;
+		}}
+	}}
+
+	{9}
+}}
