@@ -1,13 +1,15 @@
-using NetGear.Rpc.Client;
 using System;
 using System.Net;
+using System.Collections;
+using System.Collections.Generic;
+using NetGear.Rpc.Client;
 
 namespace NetGear.Example.Rpc
 {
-    public class DataContractProxy : IDataContract
+	public class DataContractProxy : IDataContract
 	{
 		ulong _serviceHash;
-        StreamedRpcClient _client;
+		StreamedRpcClient _client;
 
 		public DataContractProxy(IPEndPoint endPoint)
 		{

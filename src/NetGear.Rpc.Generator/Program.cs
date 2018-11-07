@@ -137,13 +137,11 @@ namespace NetGear.Rpc.Generator
                 }
             }
 
-            var ref_types = new StringBuilder();
             var types = compiledAssembly.ExportedTypes;
             foreach (var type in types)
             {
                 if (!type.IsInterface)
                 {
-                    ref_types.Append(GetSourceCode(type));
                     continue;
                 }
 
@@ -203,10 +201,10 @@ namespace NetGear.Rpc.Generator
                     }
                 }
 
-                var name_space = "Incubator.RpcContract";
+                var name_space = "NetGear.Example.Rpc";
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
-                var client_type = "RpcClient2";
+                var client_type = "StreamedRpcClient";
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
                    name_space,
                    proxy_type,
@@ -216,8 +214,7 @@ namespace NetGear.Rpc.Generator
                    client_type,
                    proxy_derive,
                    proxy_derive,
-                   methods_str.ToString(),
-                   ref_types.ToString());
+                   methods_str.ToString());
 
                 if (!Directory.Exists(output_path))
                 {

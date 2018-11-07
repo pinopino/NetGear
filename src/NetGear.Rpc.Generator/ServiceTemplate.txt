@@ -2,6 +2,7 @@
 using System.Net;
 using System.Collections;
 using System.Collections.Generic;
+using NetGear.Rpc.Client;
 
 namespace {0}
 {{
@@ -28,6 +29,4 @@ namespace {0}
 			return hashedValue;
 		}}
 	}}
-
-	{9}
 }}
