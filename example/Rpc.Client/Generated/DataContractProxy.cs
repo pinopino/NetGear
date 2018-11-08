@@ -19,7 +19,8 @@ namespace NetGear.Example.Rpc
 
 		public Int64 AddMoney(Int64 input1, Int64 input2)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 1, new object[] { input1, input2 });
+            var ret = _client.InvokeMethod(_serviceHash, 1, new AddParameters { a = input1, b = input2 });
+
 			return (Int64)ret[0];
 		}
 

@@ -42,8 +42,8 @@ namespace NetGear.Rpc.Server
             ServiceInfo invokedInstance;
             if ( _server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
             {
-                int index = obj.MethodIndex; 
-                object[] parameters = obj.Parameters;
+                int index = obj.MethodIndex;
+                object[] parameters = new object[] { obj.Parameter };
 
                 //invoke the method
                 object[] returnParameters;

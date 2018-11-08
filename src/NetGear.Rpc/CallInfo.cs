@@ -13,7 +13,7 @@ namespace NetGear.Rpc
     {
         public ulong ServiceHash;
         public int MethodIndex;
-        public object[] Parameters;
+        public object Parameter;
     }
 
     public class InvokeReturn
