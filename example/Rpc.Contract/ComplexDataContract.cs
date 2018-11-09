@@ -17,6 +17,13 @@ namespace NetGear.Example.Rpc
         public long Quantity { get; set; }
     }
 
+    [ProtoContract]
+    public struct Complexrrrrrrrr
+    {
+        [ProtoMember(1)]
+        public string Name { get; set; }
+    }
+
     public interface ITestContract
     {
         decimal GetDecimal(decimal input);
@@ -25,6 +32,14 @@ namespace NetGear.Example.Rpc
         Guid GetId(string source, double weight, int quantity, DateTime dt);
         ComplexResponse Get(Guid id, string label, double weight, long quantity);
         long TestLong(long id1, List<long> id2);
-        List<string> GetItems(Guid id);
+        ComplexResponse GetItems(Guid id);
+    }
+
+    public interface ITestContract23
+    {
+        Complexrrrrrrrr Get(Guid id, ComplexResponse label, double weight, long quantity);
+        Complexrrrrrrrr Get(Guid id, Complexrrrrrrrr label, double weight, long quantity);
+        Complexrrrrrrrr Get(Guid id, Complexrrrrrrrr label, Complexrrrrrrrr weight, long quantity);
+        void Get2(Guid id, Complexrrrrrrrr label, Complexrrrrrrrr weight, long quantity);
     }
 }

@@ -11,10 +11,14 @@ namespace {0}
 		ulong _serviceHash;
 		{3} _client;
 
+		static {9}()
+		{{{10}
+		}}
+
 		public {4}(IPEndPoint endPoint)
 		{{
 			_client = new {5}(typeof({6}), endPoint);
-			_serviceHash = CalculateHash(typeof({7}).FullName);{9}
+			_serviceHash = CalculateHash(typeof({7}).FullName);
 		}}
 
 		{8}

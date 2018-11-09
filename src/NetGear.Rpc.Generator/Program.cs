@@ -132,8 +132,6 @@ namespace NetGear.Rpc.Generator
             var text = File.ReadAllText(file);
             var tree = SyntaxFactory.ParseSyntaxTree(text);
 
-            var sdhhhf = typeof(Attribute);
-
             var compilation = CSharpCompilation.Create("proxy.dll", new[] { tree },
                 references: GetGlobalReferences(),
                 options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
@@ -169,7 +167,7 @@ namespace NetGear.Rpc.Generator
                 {
                     if (Attribute.GetCustomAttribute(type, typeof(ProtoContractAttribute)) != null)
                     {
-                        proto_dict.Add(type.Name, string.Empty);
+                        proto_dict.Add(type.Name, _index_for_prototype++.ToString());
                     }
                 }
             }
@@ -191,9 +189,13 @@ namespace NetGear.Rpc.Generator
                 for (int i = 0; i < ordered_methods.Length; i++)
                 {
                     return_type = GenericTypeString(ordered_methods[i].ReturnType);
-                    if (proto_dict.ContainsKey(return_type))
+                    var num1 = 0;
+                    if (proto_dict.ContainsKey(return_type) &&
+                        int.TryParse(proto_dict[return_type], out num1))
                     {
-                        proto_dict[return_type] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true).AddSubType({1}, typeof({2}));", "InvokeParam", _index_for_prototype++, return_type);
+                        proto_dict[return_type] = string.Format(
+                            "\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true)" +
+                            ".AddSubType({1}, typeof({2}));", "InvokeParam", num1, return_type);
                     }
                     method_name = ordered_methods[i].Name;
 
@@ -204,11 +206,7 @@ namespace NetGear.Rpc.Generator
                         {
                             throw new GeneratorParseException(string.Format("类型{0}的方法{1}(...{2}...)存在按引用传参调用的情况，目前暂不支持", type.Name, method_name, item.ParameterType.Name));
                         }
-                        if (proto_dict.ContainsKey(item.ParameterType.Name))
-                        {
-                            proto_dict[item.ParameterType.Name] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true).AddSubType({1}, typeof({2}));", "InvokeParam", _index_for_prototype++, item.ParameterType.Name);
-                        }
-
+                        
                         var ptype = string.Empty;
                         if (item.ParameterType.IsGenericType)
                         {
@@ -217,6 +215,14 @@ namespace NetGear.Rpc.Generator
                         else
                         {
                             ptype = item.ParameterType.Name;
+                        }
+                        var num2 = 0;
+                        if (proto_dict.ContainsKey(ptype) &&
+                            int.TryParse(proto_dict[ptype], out num2))
+                        {
+                            proto_dict[ptype] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default" +
+                                ".Add(typeof({0}), true).AddSubType({1}, typeof({2}));",
+                                "InvokeParam", num2, ptype);
                         }
                         parameters_str.Append(string.Format("{0} {1}, ", ptype, item.Name));
                     }
@@ -249,6 +255,31 @@ namespace NetGear.Rpc.Generator
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
                 var client_type = "StreamedRpcClient";
+                var proto_str = new StringBuilder();
+                if (proto_dict.Count > 0)
+                {
+                    var del_keys = new List<string>();
+                    var first = true;
+                    foreach (var item in proto_dict)
+                    {
+                        if (!int.TryParse(item.Value, out int _))
+                        {
+                            del_keys.Add(item.Key);
+                            if (first)
+                            {
+                                proto_str.AppendLine("\r\n" + item.Value);
+                                first = false;
+                            }
+                            else
+                            {                                
+                                proto_str.AppendLine(item.Value);
+                            }
+                        }
+                    }
+                    foreach (var key in del_keys)
+                        proto_dict.Remove(key);
+                }
+
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
                    name_space,
                    proxy_type,
@@ -259,7 +290,8 @@ namespace NetGear.Rpc.Generator
                    proxy_derive,
                    proxy_derive,
                    methods_str.ToString(),
-                   "");
+                   proxy_type,
+                   proto_str.ToString().TrimEnd("\r\n"));
 
                 if (!Directory.Exists(output_path))
                 {
