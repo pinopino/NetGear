@@ -14,7 +14,7 @@ namespace {0}
 		public {4}(IPEndPoint endPoint)
 		{{
 			_client = new {5}(typeof({6}), endPoint);
-			_serviceHash = CalculateHash(typeof({7}).FullName);
+			_serviceHash = CalculateHash(typeof({7}).FullName);{9}
 		}}
 
 		{8}

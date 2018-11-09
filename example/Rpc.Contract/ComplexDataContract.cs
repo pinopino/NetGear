@@ -1,12 +1,19 @@
-﻿using System;
+﻿using ProtoBuf;
+using System;
 using System.Collections.Generic;
 
 namespace NetGear.Example.Rpc
 {
+    [ProtoContract]
     public struct ComplexResponse
     {
+        [ProtoMember(1)]
         public Guid Id { get; set; }
+
+        [ProtoMember(2)]
         public string Label { get; set; }
+
+        [ProtoMember(3)]
         public long Quantity { get; set; }
     }
 

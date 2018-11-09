@@ -8,7 +8,7 @@ namespace Rpc.Server
 {
     public class DataContractImpl : IDataContract
     {
-        public long AddMoney(long input1, long input2)
+        public long AddMoney(int input1, long input2)
         {
             return input1 + input2;
         }

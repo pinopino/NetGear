@@ -17,11 +17,10 @@ namespace NetGear.Example.Rpc
 			_serviceHash = CalculateHash(typeof(IDataContract).FullName);
 		}
 
-		public Int64 AddMoney(Int64 input1, Int64 input2)
+		public Int64 AddMoney(Int32 input1, Int64 input2)
 		{
-            var ret = _client.InvokeMethod(_serviceHash, 1, new AddParameters { a = input1, b = input2 });
-
-			return (Int64)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 1, input1, input2);
+			return (Int64)ret;
 		}
 
 		private ulong CalculateHash(string str)

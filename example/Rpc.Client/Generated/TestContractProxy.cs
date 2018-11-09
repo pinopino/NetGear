@@ -15,42 +15,42 @@ namespace NetGear.Example.Rpc
 		{
 			_client = new StreamedRpcClient(typeof(ITestContract), endPoint);
 			_serviceHash = CalculateHash(typeof(ITestContract).FullName);
-		}
+        }
 
-		public ComplexResponse Get(Guid id, String label, Double weight, Int64 quantity)
+        public ComplexResponse Get(Guid id, String label, Double weight, Int64 quantity)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 1, new object[] { id, label, weight, quantity });
-			return (ComplexResponse)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 1, id, label, weight, quantity);
+			return (ComplexResponse)ret;
 		}
 
 		public Decimal GetDecimal(Decimal input)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 2, new object[] { input });
-			return (Decimal)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 2, input);
+			return (Decimal)ret;
 		}
 
 		public Guid GetId(String source, Double weight, Int32 quantity, DateTime dt)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 3, new object[] { source, weight, quantity, dt });
-			return (Guid)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 3, source, weight, quantity, dt);
+			return (Guid)ret;
 		}
 
 		public List<String> GetItems(Guid id)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 4, new object[] { id });
-			return (List<String>)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 4, id);
+			return (List<String>)ret;
 		}
 
 		public Boolean OutDecimal(Decimal val)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 5, new object[] { val });
-			return (Boolean)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 5, val);
+			return (Boolean)ret;
 		}
 
 		public Int64 TestLong(Int64 id1, List<Int64> id2)
 		{
-			var ret = _client.InvokeMethod(_serviceHash, 6, new object[] { id1, id2 });
-			return (Int64)ret[0];
+			var ret = _client.InvokeMethod(_serviceHash, 6, id1, id2);
+			return (Int64)ret;
 		}
 
 		private ulong CalculateHash(string str)

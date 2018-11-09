@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -13,6 +14,7 @@ namespace NetGear.Rpc.Generator
 {
     class Program
     {
+        static int _index_for_prototype = 100; // 起始从100开始
         static void Main(string[] args)
         {
             var input_path = ConfigurationManager.AppSettings["input_path"].Trim();
@@ -102,16 +104,38 @@ namespace NetGear.Rpc.Generator
             return true;
         }
 
+        static IEnumerable<MetadataReference> GetGlobalReferences()
+        {
+            var returnList = new List<MetadataReference>();
+
+            //The location of the .NET assemblies
+            var assemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location);
+
+            /* 
+                * Adding some necessary .NET assemblies
+                * These assemblies couldn't be loaded correctly via the same construction as above,
+                * in specific the System.Runtime.
+                */
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "mscorlib.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Core.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Runtime.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(typeof(ProtoContractAttribute).Assembly.Location));
+            returnList.Add(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+
+            return returnList;
+        }
+
         static void InnerGenerate(string file, string output_path)
         {
             var index = 0;
             var text = File.ReadAllText(file);
             var tree = SyntaxFactory.ParseSyntaxTree(text);
 
+            var sdhhhf = typeof(Attribute);
+
             var compilation = CSharpCompilation.Create("proxy.dll", new[] { tree },
-                references: new MetadataReference[] {
-                    MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location)},
+                references: GetGlobalReferences(),
                 options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
             Assembly compiledAssembly = null;
@@ -138,6 +162,18 @@ namespace NetGear.Rpc.Generator
             }
 
             var types = compiledAssembly.ExportedTypes;
+            var proto_dict = new Dictionary<string, string>();
+            foreach (var type in types)
+            {
+                if (!type.IsInterface)
+                {
+                    if (Attribute.GetCustomAttribute(type, typeof(ProtoContractAttribute)) != null)
+                    {
+                        proto_dict.Add(type.Name, string.Empty);
+                    }
+                }
+            }
+
             foreach (var type in types)
             {
                 if (!type.IsInterface)
@@ -155,6 +191,10 @@ namespace NetGear.Rpc.Generator
                 for (int i = 0; i < ordered_methods.Length; i++)
                 {
                     return_type = GenericTypeString(ordered_methods[i].ReturnType);
+                    if (proto_dict.ContainsKey(return_type))
+                    {
+                        proto_dict[return_type] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true).AddSubType({1}, typeof({2}));", "InvokeParam", _index_for_prototype++, return_type);
+                    }
                     method_name = ordered_methods[i].Name;
 
                     var parameters_str = new StringBuilder();
@@ -163,6 +203,10 @@ namespace NetGear.Rpc.Generator
                         if (item.ParameterType.IsByRef || item.ParameterType.IsMarshalByRef)
                         {
                             throw new GeneratorParseException(string.Format("类型{0}的方法{1}(...{2}...)存在按引用传参调用的情况，目前暂不支持", type.Name, method_name, item.ParameterType.Name));
+                        }
+                        if (proto_dict.ContainsKey(item.ParameterType.Name))
+                        {
+                            proto_dict[item.ParameterType.Name] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true).AddSubType({1}, typeof({2}));", "InvokeParam", _index_for_prototype++, item.ParameterType.Name);
                         }
 
                         var ptype = string.Empty;
@@ -187,8 +231,8 @@ namespace NetGear.Rpc.Generator
                     }
 
                     methods_str.AppendLine("\t\t{");
-                    methods_str.AppendLine(string.Format("\t\t\tvar ret = _client.InvokeMethod(_serviceHash, {0}, new object[] {{ {1} }});", ++index, string.Join(", ", ordered_methods[i].GetParameters().Select(p => p.Name))));
-                    methods_str.AppendLine(string.Format("\t\t\treturn ({0})ret[0];", return_type));
+                    methods_str.AppendLine(string.Format("\t\t\tvar ret = _client.InvokeMethod(_serviceHash, {0}, {1});", ++index, string.Join(", ", ordered_methods[i].GetParameters().Select(p => p.Name))));
+                    methods_str.AppendLine(string.Format("\t\t\treturn ({0})ret;", return_type));
 
                     if (i < ordered_methods.Length - 1)
                     {
@@ -214,7 +258,8 @@ namespace NetGear.Rpc.Generator
                    client_type,
                    proxy_derive,
                    proxy_derive,
-                   methods_str.ToString());
+                   methods_str.ToString(),
+                   "");
 
                 if (!Directory.Exists(output_path))
                 {

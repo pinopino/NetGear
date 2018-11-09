@@ -43,29 +43,30 @@ namespace NetGear.Rpc.Server
             if ( _server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
             {
                 int index = obj.MethodIndex;
-                object[] parameters = new object[] { obj.Parameter };
+                object[] parameters = new object[obj.Parameters.Count];
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    parameters[i] = obj.Parameters[i].UntypedValue;
+                }
 
                 //invoke the method
-                object[] returnParameters;
+                object returnValue;
                 var returnMessageType = MessageType.ReturnValues;
                 try
                 {
-                    object returnValue = invokedInstance.Methods[index].Invoke(invokedInstance.Instance, parameters);
-                    //the result to the client is the return value (null if void) and the input parameters
-                    returnParameters = new object[1 + parameters.Length];
-                    returnParameters[0] = returnValue;
+                    returnValue = invokedInstance.Methods[index].Invoke(invokedInstance.Instance, parameters);
                 }
                 catch (Exception ex)
                 {
                     //an exception was caught. Rethrow it client side
-                    returnParameters = new object[] { ex };
+                    returnValue = ex;
                     returnMessageType = MessageType.ThrowException;
                 }
 
                 var returnObj = new InvokeReturn
                 {
                     ReturnType = (int)returnMessageType,
-                    ReturnParameters = returnParameters
+                    ReturnValue = InvokeParam.CreateDynamic(returnValue)
                 };
                 //send the result back to the client
                 // (2) write the return parameters

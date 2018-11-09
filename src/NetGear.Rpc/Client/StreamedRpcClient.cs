@@ -1,9 +1,6 @@
 ﻿using NetGear.Core.Common;
-using ProtoBuf;
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 
 namespace NetGear.Rpc.Client
@@ -24,7 +21,7 @@ namespace NetGear.Rpc.Client
             _connectionPool = new ObjectPool<IPooledWapper>(12, 4, pool => new StreamedRpcConnection(pool, ++count, endPoint.Address.ToString(), endPoint.Port, 256, _debug));
         }
 
-        public object[] InvokeMethod(ulong hash, int index, object parameter)
+        public object InvokeMethod(ulong hash, int index, params object[] parameters)
         {
             using (var conn = (StreamedRpcConnection)_connectionPool.Get())
             {
@@ -33,9 +30,12 @@ namespace NetGear.Rpc.Client
                 var invoke_info = new InvokeInfo
                 {
                     ServiceHash = hash,
-                    MethodIndex = index,
-                    Parameter = parameter
+                    MethodIndex = index
                 };
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    invoke_info.Parameters.Add(InvokeParam.CreateDynamic(parameters[i]));
+                }
                 conn.Write(invoke_info).Wait();
 
                 // Read the result of the invocation.
@@ -43,10 +43,9 @@ namespace NetGear.Rpc.Client
                 if (retObj.ReturnType == (int)MessageType.UnknownMethod)
                     throw new Exception("Unknown method.");
                 if (retObj.ReturnType == (int)MessageType.ThrowException)
-                    throw (Exception)retObj.ReturnParameters[0];
+                    throw (Exception)retObj.ReturnValue.UntypedValue;
 
-                object[] outParams = retObj.ReturnParameters;
-                return outParams;
+                return retObj.ReturnValue.UntypedValue;
             }
         }
 

@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\example\Rpc.Contract\Rpc.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="ServiceTemplate.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -1,6 +1,8 @@
 ﻿using NetGear.Core.Common;
+using ProtoBuf;
 using System;
 using System.Buffers;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -56,12 +58,32 @@ namespace NetGear.Core.Connection
             return Encoding.UTF8.GetString(bytes);
         }
 
-        public async Task<T> ReadObject<T>()
+        public async Task<T> ReadObject<T>(SerializeType serializeType = SerializeType.ProtoBuff)
         {
-            var length = await ReadInt32();
-            var bytes = await ReadBytes(length);
+            switch (serializeType)
+            {
+                case SerializeType.Json:
+                    {
+                        var length = await ReadInt32();
+                        var bytes = await ReadBytes(length);
 
-            return bytes.Array.ToDeserializedObject<T>();
+                        return bytes.Array.ToDeserializedObject<T>();
+                    }
+                case SerializeType.ProtoBuff:
+                    {
+                        var length = await ReadInt32();
+                        var bytes = await ReadBytes(length);
+
+                        T obj;
+                        using (MemoryStream stream = new MemoryStream(bytes.Array, 0, length))
+                        {
+                            obj = Serializer.Deserialize<T>(stream);
+                        }
+                        return obj;
+                    }
+                default:
+                    throw new NotImplementedException();
+            }
         }
 
         public async Task Write(byte[] buffer, int offset, int count, bool rentFromPool)
@@ -159,13 +181,40 @@ namespace NetGear.Core.Connection
             await Write(bytes, 0, length, true);
         }
 
-        public async Task Write(object value)
+        public async Task Write(object value, SerializeType serializeType = SerializeType.ProtoBuff)
         {
-            var body_bytes = value.ToSerializedBytes();
-            var length = 0;
-            var bytes = CalcBytes(body_bytes, out length);
+            switch (serializeType)
+            {
+                case SerializeType.Json:
+                    {
+                        var body_bytes = value.ToSerializedBytes();
+                        var length = 0;
+                        var bytes = CalcBytes(body_bytes, out length);
 
-            await Write(bytes, 0, length, true);
+                        await Write(bytes, 0, length, true);
+                    };
+                    break;
+                case SerializeType.ProtoBuff:
+                    {
+                        // todo: 此处使用的byte[]是stream内部自己分配的，可能会导致gc问题
+                        using (MemoryStream stream = new MemoryStream())
+                        {
+                            stream.WriteByte(0);
+                            stream.WriteByte(0);
+                            stream.WriteByte(0);
+                            stream.WriteByte(0);
+                            Serializer.Serialize(stream, value);
+                            var body_bytes = stream.GetBuffer();
+                            var length_bytes = BitConverter.GetBytes(((int)stream.Position) - 4);
+                            body_bytes[0] = length_bytes[0];
+                            body_bytes[1] = length_bytes[1];
+                            body_bytes[2] = length_bytes[2];
+                            body_bytes[3] = length_bytes[3];
+                            await Write(body_bytes, 0, (int)stream.Position, false);
+                        }
+                    }
+                    break;
+            }
         }
 
         private byte[] CalcBytes(byte[] body_bytes, out int length)
