@@ -1,8 +1,14 @@
+/*
+ *  2018-11-10 11:52:44
+ *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
+ */
+
 using System;
 using System.Net;
 using System.Collections;
 using System.Collections.Generic;
 using NetGear.Rpc.Client;
+using NetGear.Rpc;
 
 namespace NetGear.Example.Rpc
 {
@@ -10,6 +16,10 @@ namespace NetGear.Example.Rpc
 	{
 		ulong _serviceHash;
 		StreamedRpcClient _client;
+
+		static DataContractProxy()
+		{
+		}
 
 		public DataContractProxy(IPEndPoint endPoint)
 		{

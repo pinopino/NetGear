@@ -1,27 +1,29 @@
-﻿using System;
+﻿{0}
+using System;
 using System.Net;
 using System.Collections;
 using System.Collections.Generic;
 using NetGear.Rpc.Client;
+using NetGear.Rpc;
 
-namespace {0}
+namespace {1}
 {{
-	public class {1} : {2}
+	public class {2} : {3}
 	{{
 		ulong _serviceHash;
-		{3} _client;
+		{4} _client;
 
-		static {9}()
-		{{{10}
+		static {5}()
+		{{{6}
 		}}
 
-		public {4}(IPEndPoint endPoint)
+		public {7}(IPEndPoint endPoint)
 		{{
-			_client = new {5}(typeof({6}), endPoint);
-			_serviceHash = CalculateHash(typeof({7}).FullName);
+			_client = new {8}(typeof({9}), endPoint);
+			_serviceHash = CalculateHash(typeof({10}).FullName);
 		}}
 
-		{8}
+		{11}
 		private ulong CalculateHash(string str)
 		{{
 			var hashedValue = 3074457345618258791ul;

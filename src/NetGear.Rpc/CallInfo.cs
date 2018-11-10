@@ -20,16 +20,6 @@ namespace NetGear.Rpc
     }
 
     [ProtoContract]
-    class NULL : InvokeParam
-    {
-        public override object UntypedValue
-        {
-            get => null;
-            set => throw new NotImplementedException();
-        }
-    }
-
-    [ProtoContract]
     public class InvokeInfo
     {
         [ProtoMember(1)]
@@ -53,57 +43,6 @@ namespace NetGear.Rpc
     }
 
     [ProtoContract]
-    [ProtoInclude(10, typeof(InvokeParam<Boolean>))]
-    [ProtoInclude(11, typeof(InvokeParam<Char>))]
-    [ProtoInclude(12, typeof(InvokeParam<SByte>))]
-    [ProtoInclude(13, typeof(InvokeParam<Byte>))]
-    [ProtoInclude(14, typeof(InvokeParam<Int16>))]
-    [ProtoInclude(15, typeof(InvokeParam<UInt16>))]
-    [ProtoInclude(16, typeof(InvokeParam<Int32>))]
-    [ProtoInclude(17, typeof(InvokeParam<UInt32>))]
-    [ProtoInclude(18, typeof(InvokeParam<Int64>))]
-    [ProtoInclude(19, typeof(InvokeParam<UInt64>))]
-    [ProtoInclude(20, typeof(InvokeParam<Single>))]
-    [ProtoInclude(21, typeof(InvokeParam<Double>))]
-    [ProtoInclude(22, typeof(InvokeParam<Decimal>))]
-    [ProtoInclude(23, typeof(InvokeParam<DateTime>))]
-    [ProtoInclude(24, typeof(InvokeParam<String>))]
-    [ProtoInclude(25, typeof(InvokeParam<Guid>))]
-
-    [ProtoInclude(26, typeof(InvokeParam<List<Boolean>>))]
-    [ProtoInclude(27, typeof(InvokeParam<List<Char>>))]
-    [ProtoInclude(28, typeof(InvokeParam<List<SByte>>))]
-    [ProtoInclude(29, typeof(InvokeParam<List<Byte>>))]
-    [ProtoInclude(30, typeof(InvokeParam<List<Int16>>))]
-    [ProtoInclude(31, typeof(InvokeParam<List<UInt16>>))]
-    [ProtoInclude(32, typeof(InvokeParam<List<Int32>>))]
-    [ProtoInclude(33, typeof(InvokeParam<List<UInt32>>))]
-    [ProtoInclude(34, typeof(InvokeParam<List<Int64>>))]
-    [ProtoInclude(35, typeof(InvokeParam<List<UInt64>>))]
-    [ProtoInclude(36, typeof(InvokeParam<List<Single>>))]
-    [ProtoInclude(37, typeof(InvokeParam<List<Double>>))]
-    [ProtoInclude(38, typeof(InvokeParam<List<Decimal>>))]
-    [ProtoInclude(39, typeof(InvokeParam<List<DateTime>>))]
-    [ProtoInclude(40, typeof(InvokeParam<List<String>>))]
-    [ProtoInclude(41, typeof(InvokeParam<List<Guid>>))]
-
-    [ProtoInclude(42, typeof(InvokeParam<Char[]>))]
-    [ProtoInclude(43, typeof(InvokeParam<SByte[]>))]
-    [ProtoInclude(44, typeof(InvokeParam<Byte[]>))]
-    [ProtoInclude(45, typeof(InvokeParam<Int16[]>))]
-    [ProtoInclude(46, typeof(InvokeParam<UInt16[]>))]
-    [ProtoInclude(47, typeof(InvokeParam<Int32[]>))]
-    [ProtoInclude(48, typeof(InvokeParam<UInt32[]>))]
-    [ProtoInclude(49, typeof(InvokeParam<Int64[]>))]
-    [ProtoInclude(50, typeof(InvokeParam<UInt64[]>))]
-    [ProtoInclude(51, typeof(InvokeParam<Single[]>))]
-    [ProtoInclude(52, typeof(InvokeParam<Double[]>))]
-    [ProtoInclude(53, typeof(InvokeParam<Decimal[]>))]
-    [ProtoInclude(54, typeof(InvokeParam<DateTime[]>))]
-    [ProtoInclude(55, typeof(InvokeParam<String[]>))]
-    [ProtoInclude(56, typeof(InvokeParam<Guid[]>))]
-    [ProtoInclude(57, typeof(InvokeParam<Boolean[]>))]
-    [ProtoInclude(58, typeof(NULL))]
     // https://stackoverflow.com/questions/2678249/in-protobuf-net-how-can-i-pass-an-array-of-type-object-with-objects-of-different
     public abstract class InvokeParam
     {
@@ -262,6 +201,16 @@ namespace NetGear.Rpc
         {
             get { return Value; }
             set { Value = (T)value; }
+        }
+    }
+
+    [ProtoContract]
+    public class NULL : InvokeParam
+    {
+        public override object UntypedValue
+        {
+            get => null;
+            set => throw new NotImplementedException();
         }
     }
 }

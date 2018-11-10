@@ -17,6 +17,7 @@ namespace NetGear.Rpc.Generator
         static int _index_for_prototype = 100; // 起始从100开始
         static void Main(string[] args)
         {
+            var head_note = ConfigurationManager.AppSettings["head_note"].Trim();
             var input_path = ConfigurationManager.AppSettings["input_path"].Trim();
             var output_path = ConfigurationManager.AppSettings["output_path"].Trim();
             if (string.IsNullOrWhiteSpace(input_path))
@@ -39,7 +40,7 @@ namespace NetGear.Rpc.Generator
                 key = Console.ReadLine();
                 if (key == "Y" || key == "y")
                 {
-                    Generate(input_path, output_path);
+                    Generate(input_path, output_path, head_note);
 
                     //DirHelper.Redirect(output_path);
 
@@ -56,7 +57,7 @@ namespace NetGear.Rpc.Generator
             Environment.Exit(0);
         }
 
-        static bool Generate(string input_path, string output_path)
+        static bool Generate(string input_path, string output_path, string head_note)
         {
             var is_file = Path.HasExtension(input_path);
             string[] input_file_paths = null;
@@ -81,7 +82,7 @@ namespace NetGear.Rpc.Generator
             {
                 for (int i = 0; i < input_file_paths.Length; i++)
                 {
-                    InnerGenerate(input_file_paths[i], output_path);
+                    InnerGenerate(input_file_paths[i], output_path, head_note);
 
                     if (progress != null)
                     {
@@ -104,38 +105,14 @@ namespace NetGear.Rpc.Generator
             return true;
         }
 
-        static IEnumerable<MetadataReference> GetGlobalReferences()
+        static Assembly DynamicComplie(string source_file)
         {
-            var returnList = new List<MetadataReference>();
-
-            //The location of the .NET assemblies
-            var assemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location);
-
-            /* 
-                * Adding some necessary .NET assemblies
-                * These assemblies couldn't be loaded correctly via the same construction as above,
-                * in specific the System.Runtime.
-                */
-            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "mscorlib.dll")));
-            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.dll")));
-            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Core.dll")));
-            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Runtime.dll")));
-            returnList.Add(MetadataReference.CreateFromFile(typeof(ProtoContractAttribute).Assembly.Location));
-            returnList.Add(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
-
-            return returnList;
-        }
-
-        static void InnerGenerate(string file, string output_path)
-        {
-            var index = 0;
-            var text = File.ReadAllText(file);
+            var text = File.ReadAllText(source_file);
             var tree = SyntaxFactory.ParseSyntaxTree(text);
 
             var compilation = CSharpCompilation.Create("proxy.dll", new[] { tree },
                 references: GetGlobalReferences(),
                 options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
             Assembly compiledAssembly = null;
             using (var ms = new MemoryStream())
             {
@@ -159,7 +136,17 @@ namespace NetGear.Rpc.Generator
                 }
             }
 
+            return compiledAssembly;
+        }
+
+        static void InnerGenerate(string file, string output_path, string head_note)
+        {
+            var index = 0;
+            // 从文件动态编译程序集
+            var compiledAssembly = DynamicComplie(file);
+            // 获取程序集的导出类型
             var types = compiledAssembly.ExportedTypes;
+            // 所有标记了[ProtoContract]的类型全部记录下来，需要为它们生成动态注册到proto的逻辑
             var proto_dict = new Dictionary<string, string>();
             foreach (var type in types)
             {
@@ -171,7 +158,7 @@ namespace NetGear.Rpc.Generator
                     }
                 }
             }
-
+            // 检测所有接口类型，生成代理类型
             foreach (var type in types)
             {
                 if (!type.IsInterface)
@@ -188,14 +175,18 @@ namespace NetGear.Rpc.Generator
                 var parameters = string.Empty;
                 for (int i = 0; i < ordered_methods.Length; i++)
                 {
-                    return_type = GenericTypeString(ordered_methods[i].ReturnType);
-                    var num1 = 0;
-                    if (proto_dict.ContainsKey(return_type) &&
-                        int.TryParse(proto_dict[return_type], out num1))
+                    var check_proto = new List<string>();
+                    return_type = GenericTypeString(ordered_methods[i].ReturnType, check_proto);
+                    foreach (var proto_type in check_proto)
                     {
-                        proto_dict[return_type] = string.Format(
-                            "\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof({0}), true)" +
-                            ".AddSubType({1}, typeof({2}));", "InvokeParam", num1, return_type);
+                        var num1 = 0;
+                        if (proto_dict.ContainsKey(proto_type) &&
+                            int.TryParse(proto_dict[proto_type], out num1))
+                        {
+                            proto_dict[proto_type] = string.Format(
+                                "\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof(InvokeParam), true)" +
+                                ".AddSubType({0}, typeof(InvokeParam<{1}>));", num1, proto_type);
+                        }
                     }
                     method_name = ordered_methods[i].Name;
 
@@ -208,21 +199,24 @@ namespace NetGear.Rpc.Generator
                         }
                         
                         var ptype = string.Empty;
+                        check_proto = new List<string>();
                         if (item.ParameterType.IsGenericType)
                         {
-                            ptype = GenericTypeString(item.ParameterType);
+                            ptype = GenericTypeString(item.ParameterType, check_proto);
                         }
                         else
                         {
                             ptype = item.ParameterType.Name;
                         }
-                        var num2 = 0;
-                        if (proto_dict.ContainsKey(ptype) &&
-                            int.TryParse(proto_dict[ptype], out num2))
+                        foreach (var proto_type in check_proto)
                         {
-                            proto_dict[ptype] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default" +
-                                ".Add(typeof({0}), true).AddSubType({1}, typeof({2}));",
-                                "InvokeParam", num2, ptype);
+                            var num2 = 0;
+                            if (proto_dict.ContainsKey(proto_type) &&
+                                int.TryParse(proto_dict[proto_type], out num2))
+                            {
+                                proto_dict[proto_type] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default" +
+                                    ".Add(typeof(InvokeParam), true).AddSubType({0}, typeof(InvokeParam<{1}>));", num2, proto_type);
+                            }
                         }
                         parameters_str.Append(string.Format("{0} {1}, ", ptype, item.Name));
                     }
@@ -235,7 +229,6 @@ namespace NetGear.Rpc.Generator
                     {
                         methods_str.AppendLine(string.Format("\t\tpublic {0} {1}({2})", return_type, method_name, parameters_str.ToString().TrimEnd(", ")));
                     }
-
                     methods_str.AppendLine("\t\t{");
                     methods_str.AppendLine(string.Format("\t\t\tvar ret = _client.InvokeMethod(_serviceHash, {0}, {1});", ++index, string.Join(", ", ordered_methods[i].GetParameters().Select(p => p.Name))));
                     methods_str.AppendLine(string.Format("\t\t\treturn ({0})ret;", return_type));
@@ -251,6 +244,7 @@ namespace NetGear.Rpc.Generator
                     }
                 }
 
+                var head = string.Format(head_note, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 var name_space = "NetGear.Example.Rpc";
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
@@ -281,17 +275,18 @@ namespace NetGear.Rpc.Generator
                 }
 
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
-                   name_space,
-                   proxy_type,
-                   proxy_derive,
-                   client_type,
-                   proxy_type,
-                   client_type,
-                   proxy_derive,
-                   proxy_derive,
-                   methods_str.ToString(),
-                   proxy_type,
-                   proto_str.ToString().TrimEnd("\r\n"));
+                    head,
+                    name_space,
+                    proxy_type,
+                    proxy_derive,
+                    client_type,
+                    proxy_type,
+                    proto_str.ToString().TrimEnd("\r\n"),
+                    proxy_type,
+                    client_type,
+                    proxy_derive,
+                    proxy_derive,
+                    methods_str.ToString());
 
                 if (!Directory.Exists(output_path))
                 {
@@ -301,15 +296,40 @@ namespace NetGear.Rpc.Generator
             }
         }
 
-        static string GenericTypeString(Type t)
+        static IEnumerable<MetadataReference> GetGlobalReferences()
+        {
+            var returnList = new List<MetadataReference>();
+
+            //The location of the .NET assemblies
+            var assemblyPath = Path.GetDirectoryName(typeof(object).Assembly.Location);
+
+            /* 
+                * Adding some necessary .NET assemblies
+                * These assemblies couldn't be loaded correctly via the same construction as above,
+                * in specific the System.Runtime.
+                */
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "mscorlib.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Core.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(Path.Combine(assemblyPath, "System.Runtime.dll")));
+            returnList.Add(MetadataReference.CreateFromFile(typeof(ProtoContractAttribute).Assembly.Location));
+            returnList.Add(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+
+            return returnList;
+        }
+
+        static string GenericTypeString(Type t, List<string> check_proto)
         {
             if (!t.IsGenericType)
+            {
+                check_proto.Add(t.Name);
                 return t.Name;
+            }
             var genericTypeName = t.GetGenericTypeDefinition().Name;
             genericTypeName = genericTypeName.Substring(0,
                 genericTypeName.IndexOf('`'));
-            var genericArgs = string.Join(",", t.GetGenericArguments().Select(ta => GenericTypeString(ta)).ToArray());
-
+            var genericArgs = string.Join(",", t.GetGenericArguments().Select(ta => GenericTypeString(ta, check_proto)).ToArray());
+            check_proto.AddRange(genericArgs.Split(','));
             return genericTypeName + "<" + genericArgs + ">";
         }
 
