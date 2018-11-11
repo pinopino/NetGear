@@ -77,8 +77,9 @@ streamed读写则没有这种困扰（好吧其实还是有，就在那最底层
 * IO合并
 * 需要一个不会产生task对象的scheduler（可能导致直接不走TAP模式）
 
-### 如何使用
-使用方式将会非常简单：
+### 关于例子
+目前网络库的使用仅给出了rpc的例子，更多例子会在今后陆续放出。
+rpc的使用方式非常简单：
 1. 定义你自己的协议
    ```csharp
    public interface IDataContract
