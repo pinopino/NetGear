@@ -1,5 +1,5 @@
 /*
- *  2018-11-10 11:52:44
+ *  2018-11-11 11:46:00
  *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
  */
 
@@ -12,14 +12,10 @@ using NetGear.Rpc;
 
 namespace NetGear.Example.Rpc
 {
-	public class DataContractProxy : IDataContract
+	public class DataContractProxy : BaseProxy, IDataContract
 	{
 		ulong _serviceHash;
 		StreamedRpcClient _client;
-
-		static DataContractProxy()
-		{
-		}
 
 		public DataContractProxy(IPEndPoint endPoint)
 		{

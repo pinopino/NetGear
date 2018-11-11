@@ -1,13 +1,18 @@
-﻿using ProtoBuf;
+/*
+ *  2018-11-11 11:46:00
+ *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
+ */
+
+using NetGear.Rpc;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
-using NetGear.Rpc;
 
 namespace NetGear.Example.Rpc
 {
     public class BaseProxy
     {
-        public BaseProxy()
+        static BaseProxy()
         {
             int index = 10;
             ProtoBuf.Meta.RuntimeTypeModel.Default[typeof(InvokeParam)]
@@ -61,9 +66,9 @@ namespace NetGear.Example.Rpc
                 .AddSubType(index++, typeof(InvokeParam<DateTime[]>))
                 .AddSubType(index++, typeof(InvokeParam<String[]>))
                 .AddSubType(index++, typeof(InvokeParam<Guid[]>))
-
-                .AddSubType(index++, typeof(InvokeParam<NULL>));
-                //.AddSubType(100, typeof(InvokeParam<ComplexResponse>));
+                
+                .AddSubType(index++, typeof(InvokeParam<NULL>))
+				.AddSubType(100, typeof(InvokeParam<ComplexResponse>));
         }
     }
 }

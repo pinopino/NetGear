@@ -1,15 +1,16 @@
-﻿using ProtoBuf;
+﻿{0}
+using NetGear.Rpc;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 
 namespace NetGear.Example.Rpc
-{
+{{
     public class BaseProxy
-    {
-        public BaseProxy()
-        {
+    {{
+        static BaseProxy()
+        {{
             int index = 10;
-            Serializer.PrepareSerializer<InvokeParam>();
             ProtoBuf.Meta.RuntimeTypeModel.Default[typeof(InvokeParam)]
                 .AddSubType(index++, typeof(InvokeParam<Boolean>))
                 .AddSubType(index++, typeof(InvokeParam<Char>))
@@ -62,8 +63,7 @@ namespace NetGear.Example.Rpc
                 .AddSubType(index++, typeof(InvokeParam<String[]>))
                 .AddSubType(index++, typeof(InvokeParam<Guid[]>))
                 
-                .AddSubType(index++, typeof(InvokeParam<NULL>));
-
-        }
-    }
-}
+                .AddSubType(index++, typeof(InvokeParam<NULL>)){1}
+        }}
+    }}
+}}

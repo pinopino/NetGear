@@ -17,7 +17,7 @@ namespace NetGear.Rpc.Generator
         static int _index_for_prototype = 100; // 起始从100开始
         static void Main(string[] args)
         {
-            var head_note = ConfigurationManager.AppSettings["head_note"].Trim();
+            var head_template = ConfigurationManager.AppSettings["head_note"].Trim();
             var input_path = ConfigurationManager.AppSettings["input_path"].Trim();
             var output_path = ConfigurationManager.AppSettings["output_path"].Trim();
             if (string.IsNullOrWhiteSpace(input_path))
@@ -40,7 +40,7 @@ namespace NetGear.Rpc.Generator
                 key = Console.ReadLine();
                 if (key == "Y" || key == "y")
                 {
-                    Generate(input_path, output_path, head_note);
+                    Generate(input_path, output_path, head_template);
 
                     //DirHelper.Redirect(output_path);
 
@@ -57,7 +57,7 @@ namespace NetGear.Rpc.Generator
             Environment.Exit(0);
         }
 
-        static bool Generate(string input_path, string output_path, string head_note)
+        static bool Generate(string input_path, string output_path, string head_template)
         {
             var is_file = Path.HasExtension(input_path);
             string[] input_file_paths = null;
@@ -80,9 +80,10 @@ namespace NetGear.Rpc.Generator
             ConsoleProgressBar progress = GetProgressBar();
             try
             {
+                var proto_types = new Dictionary<Type, string>();
                 for (int i = 0; i < input_file_paths.Length; i++)
                 {
-                    InnerGenerate(input_file_paths[i], output_path, head_note);
+                    InnerGenerate(input_file_paths[i], output_path, head_template, proto_types);
 
                     if (progress != null)
                     {
@@ -90,6 +91,20 @@ namespace NetGear.Rpc.Generator
                         ProgressPrint(progress, (i + 1), input_file_paths.Length);
                     }
                 }
+
+                // 如果有proto类型，为它们生成注册代码
+                var out_str = string.Empty;
+                var head = string.Format(head_template, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                if (proto_types.Keys.Count > 0)
+                {
+                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"), head,
+                        Environment.NewLine + string.Join(Environment.NewLine, proto_types.Values.Select(p => p)) + ";");
+                }
+                else
+                {
+                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"), head, ";");
+                }
+                File.WriteAllText(Path.Combine(output_path, "BaseProxy.cs"), out_str);
             }
             catch (GeneratorParseException ex)
             {
@@ -139,7 +154,7 @@ namespace NetGear.Rpc.Generator
             return compiledAssembly;
         }
 
-        static void InnerGenerate(string file, string output_path, string head_note)
+        static void InnerGenerate(string file, string output_path, string head_template, Dictionary<Type, string> proto_types)
         {
             var index = 0;
             // 从文件动态编译程序集
@@ -147,17 +162,17 @@ namespace NetGear.Rpc.Generator
             // 获取程序集的导出类型
             var types = compiledAssembly.ExportedTypes;
             // 所有标记了[ProtoContract]的类型全部记录下来，需要为它们生成动态注册到proto的逻辑
-            var proto_dict = new Dictionary<string, string>();
-            foreach (var type in types)
+            foreach (var type in types.OrderBy(p => p.Name))
             {
                 if (!type.IsInterface)
                 {
                     if (Attribute.GetCustomAttribute(type, typeof(ProtoContractAttribute)) != null)
                     {
-                        proto_dict.Add(type.Name, _index_for_prototype++.ToString());
+                        proto_types.Add(type, string.Format("\t\t\t\t.AddSubType({0}, typeof(InvokeParam<{1}>))", _index_for_prototype++, type.Name));
                     }
                 }
             }
+
             // 检测所有接口类型，生成代理类型
             foreach (var type in types)
             {
@@ -175,19 +190,7 @@ namespace NetGear.Rpc.Generator
                 var parameters = string.Empty;
                 for (int i = 0; i < ordered_methods.Length; i++)
                 {
-                    var check_proto = new List<string>();
-                    return_type = GenericTypeString(ordered_methods[i].ReturnType, check_proto);
-                    foreach (var proto_type in check_proto)
-                    {
-                        var num1 = 0;
-                        if (proto_dict.ContainsKey(proto_type) &&
-                            int.TryParse(proto_dict[proto_type], out num1))
-                        {
-                            proto_dict[proto_type] = string.Format(
-                                "\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default.Add(typeof(InvokeParam), true)" +
-                                ".AddSubType({0}, typeof(InvokeParam<{1}>));", num1, proto_type);
-                        }
-                    }
+                    return_type = GenericTypeString(ordered_methods[i].ReturnType);
                     method_name = ordered_methods[i].Name;
 
                     var parameters_str = new StringBuilder();
@@ -197,26 +200,15 @@ namespace NetGear.Rpc.Generator
                         {
                             throw new GeneratorParseException(string.Format("类型{0}的方法{1}(...{2}...)存在按引用传参调用的情况，目前暂不支持", type.Name, method_name, item.ParameterType.Name));
                         }
-                        
+
                         var ptype = string.Empty;
-                        check_proto = new List<string>();
                         if (item.ParameterType.IsGenericType)
                         {
-                            ptype = GenericTypeString(item.ParameterType, check_proto);
+                            ptype = GenericTypeString(item.ParameterType);
                         }
                         else
                         {
                             ptype = item.ParameterType.Name;
-                        }
-                        foreach (var proto_type in check_proto)
-                        {
-                            var num2 = 0;
-                            if (proto_dict.ContainsKey(proto_type) &&
-                                int.TryParse(proto_dict[proto_type], out num2))
-                            {
-                                proto_dict[proto_type] = string.Format("\t\t\tProtoBuf.Meta.RuntimeTypeModel.Default" +
-                                    ".Add(typeof(InvokeParam), true).AddSubType({0}, typeof(InvokeParam<{1}>));", num2, proto_type);
-                            }
                         }
                         parameters_str.Append(string.Format("{0} {1}, ", ptype, item.Name));
                     }
@@ -244,44 +236,17 @@ namespace NetGear.Rpc.Generator
                     }
                 }
 
-                var head = string.Format(head_note, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+                var head = string.Format(head_template, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 var name_space = "NetGear.Example.Rpc";
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
                 var client_type = "StreamedRpcClient";
-                var proto_str = new StringBuilder();
-                if (proto_dict.Count > 0)
-                {
-                    var del_keys = new List<string>();
-                    var first = true;
-                    foreach (var item in proto_dict)
-                    {
-                        if (!int.TryParse(item.Value, out int _))
-                        {
-                            del_keys.Add(item.Key);
-                            if (first)
-                            {
-                                proto_str.AppendLine("\r\n" + item.Value);
-                                first = false;
-                            }
-                            else
-                            {                                
-                                proto_str.AppendLine(item.Value);
-                            }
-                        }
-                    }
-                    foreach (var key in del_keys)
-                        proto_dict.Remove(key);
-                }
-
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
                     head,
                     name_space,
                     proxy_type,
                     proxy_derive,
                     client_type,
-                    proxy_type,
-                    proto_str.ToString().TrimEnd("\r\n"),
                     proxy_type,
                     client_type,
                     proxy_derive,
@@ -318,18 +283,16 @@ namespace NetGear.Rpc.Generator
             return returnList;
         }
 
-        static string GenericTypeString(Type t, List<string> check_proto)
+        static string GenericTypeString(Type t)
         {
             if (!t.IsGenericType)
             {
-                check_proto.Add(t.Name);
                 return t.Name;
             }
             var genericTypeName = t.GetGenericTypeDefinition().Name;
             genericTypeName = genericTypeName.Substring(0,
                 genericTypeName.IndexOf('`'));
-            var genericArgs = string.Join(",", t.GetGenericArguments().Select(ta => GenericTypeString(ta, check_proto)).ToArray());
-            check_proto.AddRange(genericArgs.Split(','));
+            var genericArgs = string.Join(",", t.GetGenericArguments().Select(ta => GenericTypeString(ta)).ToArray());
             return genericTypeName + "<" + genericArgs + ">";
         }
 

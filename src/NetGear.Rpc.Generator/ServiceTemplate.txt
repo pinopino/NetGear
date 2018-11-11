@@ -8,22 +8,18 @@ using NetGear.Rpc;
 
 namespace {1}
 {{
-	public class {2} : {3}
+	public class {2} : BaseProxy, {3}
 	{{
 		ulong _serviceHash;
 		{4} _client;
 
-		static {5}()
-		{{{6}
-		}}
-
-		public {7}(IPEndPoint endPoint)
+		public {5}(IPEndPoint endPoint)
 		{{
-			_client = new {8}(typeof({9}), endPoint);
-			_serviceHash = CalculateHash(typeof({10}).FullName);
+			_client = new {6}(typeof({7}), endPoint);
+			_serviceHash = CalculateHash(typeof({8}).FullName);
 		}}
 
-		{11}
+		{9}
 		private ulong CalculateHash(string str)
 		{{
 			var hashedValue = 3074457345618258791ul;

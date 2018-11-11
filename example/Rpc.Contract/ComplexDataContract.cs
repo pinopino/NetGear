@@ -1,4 +1,5 @@
-﻿using ProtoBuf;
+﻿using Newtonsoft.Json;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 
@@ -15,6 +16,11 @@ namespace NetGear.Example.Rpc
 
         [ProtoMember(3)]
         public long Quantity { get; set; }
+
+        public override string ToString()
+        {
+            return JsonConvert.SerializeObject(this);
+        }
     }
 
     public interface ITestContract
