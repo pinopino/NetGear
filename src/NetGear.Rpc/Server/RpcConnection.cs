@@ -66,7 +66,7 @@ namespace NetGear.Rpc.Server
                 var returnObj = new InvokeReturn
                 {
                     ReturnType = (int)returnMessageType,
-                    ReturnValue = InvokeParam.CreateDynamic(returnValue)
+                    ReturnValue = InvokeParam.CreateDynamic(returnValue == null ? new NULL() : returnValue)
                 };
                 //send the result back to the client
                 // (2) write the return parameters

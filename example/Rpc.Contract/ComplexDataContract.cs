@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using ProtoBuf;
+﻿using ProtoBuf;
 using System;
 using System.Collections.Generic;
 
@@ -16,11 +15,6 @@ namespace NetGear.Example.Rpc
 
         [ProtoMember(3)]
         public long Quantity { get; set; }
-
-        public override string ToString()
-        {
-            return JsonConvert.SerializeObject(this);
-        }
     }
 
     public interface ITestContract
@@ -30,5 +24,6 @@ namespace NetGear.Example.Rpc
         Guid GetId(string source, double weight, int quantity, DateTime dt);
         ComplexResponse Get(Guid id, string label, double weight, long quantity);
         long TestLong(long id1, List<long> id2);
+        void TestVoid();
     }
 }

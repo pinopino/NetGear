@@ -190,7 +190,7 @@ namespace NetGear.Rpc.Generator
                 var parameters = string.Empty;
                 for (int i = 0; i < ordered_methods.Length; i++)
                 {
-                    return_type = GenericTypeString(ordered_methods[i].ReturnType);
+                    return_type = ordered_methods[i].ReturnType == typeof(void) ? "void" : GenericTypeString(ordered_methods[i].ReturnType);
                     method_name = ordered_methods[i].Name;
 
                     var parameters_str = new StringBuilder();
@@ -222,8 +222,12 @@ namespace NetGear.Rpc.Generator
                         methods_str.AppendLine(string.Format("\t\tpublic {0} {1}({2})", return_type, method_name, parameters_str.ToString().TrimEnd(", ")));
                     }
                     methods_str.AppendLine("\t\t{");
-                    methods_str.AppendLine(string.Format("\t\t\tvar ret = _client.InvokeMethod(_serviceHash, {0}, {1});", ++index, string.Join(", ", ordered_methods[i].GetParameters().Select(p => p.Name))));
-                    methods_str.AppendLine(string.Format("\t\t\treturn ({0})ret;", return_type));
+                    var call_str = string.Join(", ", ordered_methods[i].GetParameters().Select(p => p.Name));
+                    methods_str.AppendLine(string.Format("\t\t\tvar ret = _client.InvokeMethod(_serviceHash, {0}{1});",
+                        ++index,
+                        call_str == string.Empty ? string.Empty : ", " + call_str));
+                    if (return_type != "void")
+                        methods_str.AppendLine(string.Format("\t\t\treturn ({0})ret;", return_type));
 
                     if (i < ordered_methods.Length - 1)
                     {

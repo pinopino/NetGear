@@ -45,6 +45,11 @@ namespace Rpc.Server
         {
             return id2.Select(p => p + id1).Sum();
         }
+
+        public void TestVoid()
+        {
+            ;
+        }
     }
 
     class Program

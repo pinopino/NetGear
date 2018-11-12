@@ -31,6 +31,9 @@ namespace Rpc.Client
             var ret6 = proxy2.TestLong(1, new List<long> { 0, 1, 2, 3 });
             Console.WriteLine("调用ITestContract.TestLong方法成功，返回值：" + ret6);
 
+            proxy2.TestVoid();
+            Console.WriteLine("调用ITestContract.TestVoid方法成功[无参数，无返回值]");
+
             Console.Read();
         }
     }

@@ -1,5 +1,5 @@
 /*
- *  2018-11-11 11:46:00
+ *  2018-11-12 22:43:19
  *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
  */
 
@@ -51,6 +51,11 @@ namespace NetGear.Example.Rpc
 		{
 			var ret = _client.InvokeMethod(_serviceHash, 5, id1, id2);
 			return (Int64)ret;
+		}
+
+		public void TestVoid()
+		{
+			var ret = _client.InvokeMethod(_serviceHash, 6);
 		}
 
 		private ulong CalculateHash(string str)
