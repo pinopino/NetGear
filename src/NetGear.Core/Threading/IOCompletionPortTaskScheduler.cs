@@ -9,19 +9,30 @@
 using Microsoft.Win32.SafeHandles;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace NetGear.Core.Threading
 {
-    /// <summary>Provides a TaskScheduler that uses an I/O completion port for concurrency control.</summary>
-    public sealed class IOCompletionPortTaskScheduler : TaskScheduler, IDisposable
+    public interface IScheduler
     {
+        void QueueTask(Action<object> action, object state);
+    }
+
+    // 说明：原版本来自于微软，这里作了修改去除了task，试图消除巨量task带来gc压力
+    // todo: Kestrel中控制线程的方式跟这个在思路上是很类似的，比较感兴趣二者的性能对比
+    /// <summary>Provides a TaskScheduler that uses an I/O completion port for concurrency control.</summary>
+    public sealed class IOCompletionPortTaskScheduler : IScheduler, IDisposable
+    {
+        private struct Work
+        {
+            public Action<object> Callback;
+            public object State;
+        }
+
         /// <summary>The queue of tasks to be scheduled.</summary>
-        private readonly ConcurrentQueue<Task> m_tasks;
+        private readonly ConcurrentQueue<Work> m_tasks;
         /// <summary>The I/O completion port to use for concurrency control.</summary>
         private readonly IOCompletionPort m_iocp;
         /// <summary>Whether the current thread is a scheduler thread.</summary>
@@ -38,7 +49,7 @@ namespace NetGear.Core.Threading
             if (maxConcurrencyLevel < 1) throw new ArgumentNullException("maxConcurrencyLevel");
             if (numAvailableThreads < 1) throw new ArgumentNullException("numAvailableThreads");
 
-            m_tasks = new ConcurrentQueue<Task>();
+            m_tasks = new ConcurrentQueue<Work>();
             m_iocp = new IOCompletionPort(maxConcurrencyLevel);
             m_schedulerThread = new ThreadLocal<bool>();
             m_remainingThreadsToShutdown = new CountdownEvent(numAvailableThreads);
@@ -57,14 +68,22 @@ namespace NetGear.Core.Threading
                         // there's a work item, then process it.
                         while (m_iocp.WaitOne())
                         {
-                            Task next;
-                            if (m_tasks.TryDequeue(out next)) TryExecuteTask(next);
+                            Work next;
+                            if (m_tasks.TryDequeue(out next))
+                                next.Callback(next.State);
                         }
                     }
                     finally { m_remainingThreadsToShutdown.Signal(); }
                 })
                 { IsBackground = true }.Start();
             }
+        }
+
+        public void QueueTask(Action<object> action, object state)
+        {
+            // Store the task and let the I/O completion port know that more work has arrived.
+            m_tasks.Enqueue(new Work { Callback = action, State = state });
+            m_iocp.NotifyOne();
         }
 
         /// <summary>Dispose of the scheduler.</summary>
@@ -81,30 +100,6 @@ namespace NetGear.Core.Threading
 
             // Clean up remaining state
             m_schedulerThread.Dispose();
-        }
-
-        /// <summary>Gets a list of all tasks scheduled to this scheduler.</summary>
-        /// <returns>An enumerable of all scheduled tasks.</returns>
-        protected override IEnumerable<Task> GetScheduledTasks() { return m_tasks.ToArray(); }
-
-        /// <summary>Queues a task to this scheduler for execution.</summary>
-        /// <param name="task">The task to be executed.</param>
-        protected override void QueueTask(Task task)
-        {
-            // Store the task and let the I/O completion port know that more work has arrived.
-            m_tasks.Enqueue(task);
-            m_iocp.NotifyOne();
-        }
-
-        /// <summary>Try to execute a task on the current thread.</summary>
-        /// <param name="task">The task to execute.</param>
-        /// <param name="taskWasPreviouslyQueued">Whether the task was previously queued to this scheduler.</param>
-        /// <returns>Whether the task was executed.</returns>
-        protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
-        {
-            // Only inline from scheduler threads.  This is to ensure concurrency control 
-            // is able to handle inlining as well.
-            return m_schedulerThread.Value && TryExecuteTask(task);
         }
 
         /// <summary>Provides a simple managed wrapper for an I/O completion port.</summary>

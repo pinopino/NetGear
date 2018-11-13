@@ -244,9 +244,9 @@ namespace NetGear.Core.Connection
             Dispose(false);
         }
 
-        public override async void Start()
+        public override void Start()
         {
-            await Task.Factory.StartNew(() =>
+            Action<object> action = (state) =>
             {
                 Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
                 Interlocked.CompareExchange(ref _execStatus, STARTED, NOT_STARTED);
@@ -255,10 +255,8 @@ namespace NetGear.Core.Connection
                 {
                     ProcessReceive(_pooledReadEventArgs);
                 }
-            },
-            CancellationToken.None,
-            TaskCreationOptions.None,
-            Scheduler);
+            };
+            Scheduler.QueueTask(action, null);
         }
 
         private void ProcessReceive(SocketAsyncEventArgs e)
@@ -318,7 +316,7 @@ namespace NetGear.Core.Connection
 
         private void IO_Completed(object sender, SocketAsyncEventArgs e)
         {
-            Task.Factory.StartNew(() =>
+            Action<object> action = (state) =>
             {
                 Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
                 switch (e.LastOperation)
@@ -332,10 +330,8 @@ namespace NetGear.Core.Connection
                     default:
                         throw new ArgumentException("未知的e.LastOperation");
                 }
-            },
-            CancellationToken.None,
-            TaskCreationOptions.None,
-            Scheduler);
+            };
+            Scheduler.QueueTask(action, null);
         }
 
         internal byte[] GetMessageBytes(string message, out int length)

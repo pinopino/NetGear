@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NetGear.Core.Threading;
+using System;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -18,14 +19,14 @@ namespace NetGear.Core
     {
         bool _debug;
         bool _disposed;
-        TaskScheduler _scheduler;
+        IScheduler _scheduler;
         readonly static Action SENTINEL = () => { };
 
         internal bool m_wasCompleted;
         internal Action m_continuation;
         internal SocketAsyncEventArgs m_eventArgs;
 
-        public SocketAwaitable(SocketAsyncEventArgs eventArgs, TaskScheduler scheduler = null, bool debug = false)
+        public SocketAwaitable(SocketAsyncEventArgs eventArgs, IScheduler scheduler = null, bool debug = false)
         {
             if (eventArgs == null)
                 throw new ArgumentNullException("eventArgs");
@@ -79,13 +80,7 @@ namespace NetGear.Core
                 }
                 else
                 {
-                    Task.Factory.StartNew(() =>
-                    {
-                        prev();
-                    },
-                    CancellationToken.None,
-                    TaskCreationOptions.None,
-                    _scheduler);
+                    _scheduler.QueueTask((state) => prev(), null);
                 }
             }
         }

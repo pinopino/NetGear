@@ -52,11 +52,11 @@ namespace NetGear.Core.Connection
         #region 事件
         internal event EventHandler<ConnectionInfo> OnConnectionClosed;
         #endregion
-        public static IOCompletionPortTaskScheduler Scheduler;
+        public static IScheduler Scheduler;
 
         static BaseConnection()
         {
-            var concurrency = Environment.ProcessorCount;
+            var concurrency = Math.Min(Environment.ProcessorCount, 12);
             Scheduler = new IOCompletionPortTaskScheduler(concurrency, concurrency);
         }
 
