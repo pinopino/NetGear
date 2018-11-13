@@ -63,7 +63,7 @@ namespace NetGear.Core.Client
                                     // 接收到FIN
                                     if (read == 0)
                                     {
-                                        _connection.DoClose();
+                                        _connection.Close();
                                         return;
                                     }
 
@@ -72,7 +72,7 @@ namespace NetGear.Core.Client
                                 }
                                 else
                                 {
-                                    _connection.DoAbort("e.SocketError != SocketError.Success");
+                                    _connection.Abort("e.SocketError != SocketError.Success");
                                     return;
                                 }
                             }
@@ -102,7 +102,7 @@ namespace NetGear.Core.Client
                                         ArrayPool<byte>.Shared.Return(headBuffer, true);
                                         if (messageLength == 0 || messageLength > maxMessageLength)
                                         {
-                                            _connection.DoAbort("消息长度为0或超过最大限制，直接丢弃");
+                                            _connection.Abort("消息长度为0或超过最大限制，直接丢弃");
                                             return;
                                         }
 

@@ -34,7 +34,7 @@ namespace NetGear.Core.Listener
 
         #region 事件
         public event EventHandler<ConnectionInfo> OnConnectionCreated;
-        public event EventHandler<ConnectionInfo> OnConnectionAborted;
+        public event EventHandler<ConnectionAbortedInfo> OnConnectionAborted;
         public event EventHandler<ConnectionInfo> OnConnectionClosed;
         #endregion
 
@@ -125,21 +125,10 @@ namespace NetGear.Core.Listener
                 Interlocked.Increment(ref _connectedCount);
                 connection = CreateConnection(e);
                 connection.OnConnectionClosed += ConnectionClosed;
+                connection.OnConnectionAborted += ConnectionAborted;
                 connection.Start();
                 ConnectionList.TryAdd(_connectedCount, connection);
                 OnConnectionCreated?.Invoke(this, new ConnectionInfo { Num = connection.Id, Description = string.Empty, Time = DateTime.Now });
-            }
-            catch (SocketException ex)
-            {
-                Print(ex.Message);
-            }
-            catch (ConnectionAbortedException ex)
-            {
-                Print(ex.Message);
-                connection.Close();
-                _acceptedClientsSemaphore.Release();
-                Interlocked.Decrement(ref _connectedCount);
-                OnConnectionAborted?.Invoke(this, new ConnectionInfo { Num = connection.Id, Description = string.Empty, Time = DateTime.Now });
             }
             catch (Exception ex)
             {
@@ -154,6 +143,11 @@ namespace NetGear.Core.Listener
         protected virtual void ConnectionClosed(object sender, ConnectionInfo connectionInfo)
         {
             OnConnectionClosed?.Invoke(sender, connectionInfo);
+        }
+
+        protected virtual void ConnectionAborted(object sender, ConnectionAbortedInfo abortInfo)
+        {
+            OnConnectionAborted?.Invoke(sender, abortInfo);
         }
 
         public virtual void Stop()

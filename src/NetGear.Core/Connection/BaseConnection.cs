@@ -17,22 +17,10 @@ namespace NetGear.Core.Connection
         }
     }
 
-    public class ConnectionAbortedException : OperationCanceledException
+    public class ConnectionAbortedInfo
     {
-        public ConnectionAbortedException()
-            : this("连接终止")
-        {
-        }
-
-        public ConnectionAbortedException(string message)
-            : base(message)
-        {
-        }
-
-        public ConnectionAbortedException(string message, Exception inner)
-            : base(message, inner)
-        {
-        }
+        public string AbortReason { set; get; }
+        public ConnectionInfo Connection { set; get; }
     }
 
     public abstract class BaseConnection : IDisposable
@@ -51,6 +39,7 @@ namespace NetGear.Core.Connection
         internal int Id { get { return _id; } }
         #region 事件
         internal event EventHandler<ConnectionInfo> OnConnectionClosed;
+        internal event EventHandler<ConnectionAbortedInfo> OnConnectionAborted;
         #endregion
         public static IScheduler Scheduler;
 
@@ -79,6 +68,13 @@ namespace NetGear.Core.Connection
 
         public void Close()
         {
+            DoClose();
+            Dispose();
+            OnConnectionClosed?.Invoke(this, new ConnectionInfo { Num = _id, Description = string.Empty, Time = DateTime.Now });
+        }
+
+        private void DoClose()
+        {
             Interlocked.CompareExchange(ref _execStatus, SHUTTING_DOWN, STARTED);
             // close the socket associated with the client
             try
@@ -93,20 +89,15 @@ namespace NetGear.Core.Connection
             Interlocked.CompareExchange(ref _execStatus, SHUTDOWN, SHUTTING_DOWN);
         }
 
-        public void DoClose()
+        public void Abort(string reason)
         {
-            Close();
+            DoClose();
             Dispose();
-            OnConnectionClosed?.Invoke(this, new ConnectionInfo { Num = _id, Description = string.Empty, Time = DateTime.Now });
-        }
-
-        public void DoAbort(string reason)
-        {
-            Close();
-            Dispose();
-            // todo: 直接被设置到task的result里面了，在listener的线程中抓不到这个异常
-            // 类似的其它异常也需要注意这种情况
-            throw new ConnectionAbortedException(reason);
+            OnConnectionAborted?.Invoke(this, new ConnectionAbortedInfo
+            {
+                AbortReason = reason,
+                Connection = new ConnectionInfo { Num = _id, Description = string.Empty, Time = DateTime.Now }
+            });
         }
 
         protected void Print(string message)

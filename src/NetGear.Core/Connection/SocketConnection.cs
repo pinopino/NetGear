@@ -4,7 +4,6 @@ using System.Buffers;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
@@ -62,7 +61,7 @@ namespace NetGear.Core.Connection
                                     // 接收到FIN
                                     if (read == 0)
                                     {
-                                        _connection.DoClose();
+                                        _connection.Close();
                                         return;
                                     }
 
@@ -71,7 +70,7 @@ namespace NetGear.Core.Connection
                                 }
                                 else
                                 {
-                                    _connection.DoAbort("e.SocketError != SocketError.Success");
+                                    _connection.Abort("e.SocketError != SocketError.Success");
                                     return;
                                 }
                             }
@@ -101,7 +100,7 @@ namespace NetGear.Core.Connection
                                         ArrayPool<byte>.Shared.Return(headBuffer, true);
                                         if (messageLength == 0 || messageLength > maxMessageLength)
                                         {
-                                            _connection.DoAbort("消息长度为0或超过最大限制，直接丢弃");
+                                            _connection.Abort("消息长度为0或超过最大限制，直接丢弃");
                                             return;
                                         }
 
@@ -248,12 +247,23 @@ namespace NetGear.Core.Connection
         {
             Action<object> action = (state) =>
             {
-                Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
-                Interlocked.CompareExchange(ref _execStatus, STARTED, NOT_STARTED);
-                var willRaiseEvent = _socket.ReceiveAsync(_pooledReadEventArgs);
-                if (!willRaiseEvent)
+                try
                 {
-                    ProcessReceive(_pooledReadEventArgs);
+                    Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
+                    Interlocked.CompareExchange(ref _execStatus, STARTED, NOT_STARTED);
+                    var willRaiseEvent = _socket.ReceiveAsync(_pooledReadEventArgs);
+                    if (!willRaiseEvent)
+                    {
+                        ProcessReceive(_pooledReadEventArgs);
+                    }
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                {
+                    Abort("远程连接被关闭");
+                }
+                catch
+                {
+                    Close();
                 }
             };
             Scheduler.QueueTask(action, null);
@@ -318,20 +328,31 @@ namespace NetGear.Core.Connection
         {
             Action<object> action = (state) =>
             {
-                Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
-                switch (e.LastOperation)
+                try
                 {
-                    case SocketAsyncOperation.Receive:
-                        ProcessReceive(e);
-                        break;
-                    case SocketAsyncOperation.Send:
-                        ProcessSend(e);
-                        break;
-                    default:
-                        throw new ArgumentException("未知的e.LastOperation");
+                    Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
+                    switch (e.LastOperation)
+                    {
+                        case SocketAsyncOperation.Receive:
+                            ProcessReceive(e);
+                            break;
+                        case SocketAsyncOperation.Send:
+                            ProcessSend(e);
+                            break;
+                        default:
+                            throw new ArgumentException("未知的e.LastOperation");
+                    }
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                {
+                    Abort("远程连接被关闭");
+                }
+                catch
+                {
+                    Close();
                 }
             };
-            Scheduler.QueueTask(action, null);
+            Scheduler.QueueTask(action, e);
         }
 
         internal byte[] GetMessageBytes(string message, out int length)

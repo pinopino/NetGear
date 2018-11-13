@@ -29,7 +29,18 @@ namespace NetGear.Rpc.Server
         {
             while (true)
             {
-                await ProcessInvocation();
+                try
+                {
+                    await ProcessInvocation();
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                {
+                    Abort("远程连接被关闭");
+                }
+                catch
+                {
+                    Close();
+                }
             }
         }
 
