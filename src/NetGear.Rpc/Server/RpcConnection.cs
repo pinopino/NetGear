@@ -36,10 +36,12 @@ namespace NetGear.Rpc.Server
                 catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
                 {
                     Abort("远程连接被关闭");
+                    break;
                 }
                 catch
                 {
                     Close();
+                    break;
                 }
             }
         }

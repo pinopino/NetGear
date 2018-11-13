@@ -62,6 +62,7 @@ namespace NetGear.Core.Threading
                     try
                     {
                         // Note that this is a scheduler thread.  Used for inlining checks.
+                        // todo: 去掉task之后，inline的情况可能需要手动判断手动处理了
                         m_schedulerThread.Value = true;
 
                         // Continually wait on the I/O completion port until 

@@ -14,12 +14,21 @@ namespace NetGear.Rpc.Generator
 {
     class Program
     {
+        static string input_path;
+        static string output_path;
+        static string name_space_gen;
+        static string name_space_ref;
+        static string head_note;
         static int _index_for_prototype = 100; // 起始从100开始
         static void Main(string[] args)
         {
             var head_template = ConfigurationManager.AppSettings["head_note"].Trim();
-            var input_path = ConfigurationManager.AppSettings["input_path"].Trim();
-            var output_path = ConfigurationManager.AppSettings["output_path"].Trim();
+            head_note = string.Format(head_template, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            input_path = ConfigurationManager.AppSettings["input_path"].Trim();
+            output_path = ConfigurationManager.AppSettings["output_path"].Trim();
+            name_space_gen = ConfigurationManager.AppSettings["namespace_gen"].Trim();
+            name_space_ref = ConfigurationManager.AppSettings["namespace_ref"].Trim();
+
             if (string.IsNullOrWhiteSpace(input_path))
             {
                 Print("请指定输入文件路径！", 3);
@@ -32,6 +41,13 @@ namespace NetGear.Rpc.Generator
                 goto End;
             }
 
+            if (string.IsNullOrWhiteSpace(name_space_gen))
+            {
+                Print("请指定生成类的名称空间！", 3);
+                goto End;
+            }
+            name_space_ref = name_space_ref == name_space_gen ? string.Empty : Environment.NewLine + string.Format("using {0};", name_space_ref);
+
             // 生成服务文件
             Print("按 'y/Y' 生成服务类文件...");
             var key = string.Empty;
@@ -40,7 +56,7 @@ namespace NetGear.Rpc.Generator
                 key = Console.ReadLine();
                 if (key == "Y" || key == "y")
                 {
-                    Generate(input_path, output_path, head_template);
+                    Generate();
 
                     //DirHelper.Redirect(output_path);
 
@@ -57,7 +73,7 @@ namespace NetGear.Rpc.Generator
             Environment.Exit(0);
         }
 
-        static bool Generate(string input_path, string output_path, string head_template)
+        static bool Generate()
         {
             var is_file = Path.HasExtension(input_path);
             string[] input_file_paths = null;
@@ -83,7 +99,7 @@ namespace NetGear.Rpc.Generator
                 var proto_types = new Dictionary<Type, string>();
                 for (int i = 0; i < input_file_paths.Length; i++)
                 {
-                    InnerGenerate(input_file_paths[i], output_path, head_template, proto_types);
+                    InnerGenerate(input_file_paths[i], proto_types);
 
                     if (progress != null)
                     {
@@ -94,15 +110,21 @@ namespace NetGear.Rpc.Generator
 
                 // 如果有proto类型，为它们生成注册代码
                 var out_str = string.Empty;
-                var head = string.Format(head_template, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 if (proto_types.Keys.Count > 0)
                 {
-                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"), head,
+                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"),
+                        head_note,
+                        name_space_ref,
+                        name_space_gen,
                         Environment.NewLine + string.Join(Environment.NewLine, proto_types.Values.Select(p => p)) + ";");
                 }
                 else
                 {
-                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"), head, ";");
+                    out_str = string.Format(File.ReadAllText("BaseProxy.txt"), 
+                        head_note,
+                        name_space_ref, 
+                        name_space_gen, 
+                        ";");
                 }
                 File.WriteAllText(Path.Combine(output_path, "BaseProxy.cs"), out_str);
             }
@@ -141,7 +163,7 @@ namespace NetGear.Rpc.Generator
                     Console.WriteLine();
                     foreach (Diagnostic diagnostic in failures)
                     {
-                        Console.WriteLine("{0}: {1}", diagnostic.Id, diagnostic.GetMessage());
+                        Print(string.Format("{0}: {1}", diagnostic.Id, diagnostic.GetMessage()), 3);
                     }
                 }
                 else
@@ -154,7 +176,7 @@ namespace NetGear.Rpc.Generator
             return compiledAssembly;
         }
 
-        static void InnerGenerate(string file, string output_path, string head_template, Dictionary<Type, string> proto_types)
+        static void InnerGenerate(string file, Dictionary<Type, string> proto_types)
         {
             var index = 0;
             // 从文件动态编译程序集
@@ -240,14 +262,13 @@ namespace NetGear.Rpc.Generator
                     }
                 }
 
-                var head = string.Format(head_template, Environment.NewLine, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-                var name_space = "NetGear.Example.Rpc";
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
                 var client_type = "StreamedRpcClient";
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
-                    head,
-                    name_space,
+                    head_note,
+                    name_space_ref,
+                    name_space_gen,
                     proxy_type,
                     proxy_derive,
                     client_type,

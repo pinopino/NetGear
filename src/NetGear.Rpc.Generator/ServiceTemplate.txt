@@ -3,23 +3,22 @@ using System;
 using System.Net;
 using System.Collections;
 using System.Collections.Generic;
-using NetGear.Rpc.Client;
-using NetGear.Rpc;
+using NetGear.Rpc.Client;{1}
 
-namespace {1}
+namespace {2}
 {{
-	public class {2} : BaseProxy, {3}
+	public class {3} : BaseProxy, {4}
 	{{
 		ulong _serviceHash;
-		{4} _client;
+		{5} _client;
 
-		public {5}(IPEndPoint endPoint)
+		public {6}(IPEndPoint endPoint)
 		{{
-			_client = new {6}(typeof({7}), endPoint);
-			_serviceHash = CalculateHash(typeof({8}).FullName);
+			_client = new {7}(typeof({8}), endPoint);
+			_serviceHash = CalculateHash(typeof({9}).FullName);
 		}}
 
-		{9}
+		{10}
 		private ulong CalculateHash(string str)
 		{{
 			var hashedValue = 3074457345618258791ul;

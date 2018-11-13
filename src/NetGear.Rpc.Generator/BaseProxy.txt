@@ -1,10 +1,9 @@
 ﻿{0}
 using NetGear.Rpc;
-using ProtoBuf;
 using System;
-using System.Collections.Generic;
+using System.Collections.Generic;{1}
 
-namespace NetGear.Example.Rpc
+namespace {2}
 {{
     public class BaseProxy
     {{
@@ -63,7 +62,7 @@ namespace NetGear.Example.Rpc
                 .AddSubType(index++, typeof(InvokeParam<String[]>))
                 .AddSubType(index++, typeof(InvokeParam<Guid[]>))
                 
-                .AddSubType(index++, typeof(InvokeParam<NULL>)){1}
+                .AddSubType(index++, typeof(InvokeParam<NULL>)){3}
         }}
     }}
 }}

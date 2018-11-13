@@ -32,6 +32,9 @@ namespace NetGear.Rpc.Server
             ServerStarting();
             _listener.Start(_endPoint);
             ServerStarted();
+            _listener.OnConnectionCreated += (sender, info) => { Console.WriteLine("新建立连接：" + info); };
+            _listener.OnConnectionAborted += (sender, info) => { Console.WriteLine("连接被终止：" + info); };
+            _listener.OnConnectionClosed += (sender, info) => { Console.WriteLine("连接关闭：" + info); };
         }
 
         public void Stop()
