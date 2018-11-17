@@ -49,7 +49,7 @@ namespace Echo.Server
                     var str = await ReadString();
                     await Write(str);
                 }
-                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                catch (SocketException ex)
                 {
                     Abort("远程连接被关闭");
                     break;
@@ -90,7 +90,7 @@ namespace Echo.Server
     public class EchoServer
     {
         bool _debug;
-        int _bufferSize = 512;
+        int _bufferSize = 128;
         int _maxConnectionCount = 500;
         IPEndPoint _endPoint;
         BaseListener _listener;

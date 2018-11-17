@@ -251,10 +251,13 @@ namespace NetGear.Core.Connection
         {
             ReleaseLargeBuffer();
             _largebuffer = ArrayPool<byte>.Shared.Rent(count);
-            _readEventArgs.SetBuffer(0, _readEventArgs.Buffer.Length);
             var read = 0;
-            do
+            var need = 0;
+            var remain = count;
+            while (remain > 0)
             {
+                need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
+                _readEventArgs.SetBuffer(0, need);
                 await _socket.ReceiveAsync(_readAwait);
                 if (_readEventArgs.BytesTransferred == 0)
                 {
@@ -262,9 +265,11 @@ namespace NetGear.Core.Connection
                     // todo: 添加处理逻辑
                     break;
                 }
-                Buffer.BlockCopy(_readEventArgs.Buffer, 0, _largebuffer, read, _readEventArgs.BytesTransferred);
+                var tmp = _readEventArgs.BytesTransferred < need ? _readEventArgs.BytesTransferred : need;
+                Buffer.BlockCopy(_readEventArgs.Buffer, 0, _largebuffer, read, tmp);
+                read += tmp;
+                remain -= tmp;
             }
-            while ((read += _readEventArgs.BytesTransferred) < count);
         }
 
         private unsafe void UnsafeDoubleBytes(double value)
