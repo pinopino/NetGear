@@ -6,8 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NetGear.Core\NetGear.Core.csproj" />
-    <ProjectReference Include="..\..\src\NetGear.Rpc\NetGear.Rpc.csproj" />
+    <ProjectReference Include="..\..\..\src\NetGear.Rpc\NetGear.Rpc.csproj" />
     <ProjectReference Include="..\Rpc.Contract\Rpc.Contract.csproj" />
   </ItemGroup>
 
