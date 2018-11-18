@@ -41,12 +41,18 @@ namespace NetGear.Core.Connection
         internal event EventHandler<ConnectionInfo> OnConnectionClosed;
         internal event EventHandler<ConnectionAbortedInfo> OnConnectionAborted;
         #endregion
-        public static IScheduler Scheduler;
+        private static IScheduler[] _schedulers;
+        private static int _concurrency;
+        protected IScheduler _scheduler;
 
         static BaseConnection()
         {
-            var concurrency = Math.Min(Environment.ProcessorCount, 12);
-            Scheduler = new IOCompletionPortTaskScheduler(concurrency, concurrency);
+            _concurrency = Math.Min(Environment.ProcessorCount, 16);
+            _schedulers = new IOQueue[_concurrency];
+            for (int i = 0; i < _concurrency; i++)
+            {
+                _schedulers[i] = new IOQueue();
+            }
         }
 
         public BaseConnection(int id, Socket socket, bool debug = false)
@@ -56,6 +62,7 @@ namespace NetGear.Core.Connection
             _disposed = false;
             _execStatus = NOT_STARTED;
             _socket = socket;
+            _scheduler = _schedulers[_id % _concurrency];
         }
 
         ~BaseConnection()

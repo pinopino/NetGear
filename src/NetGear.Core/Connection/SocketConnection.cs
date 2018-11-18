@@ -266,7 +266,7 @@ namespace NetGear.Core.Connection
                     Close();
                 }
             };
-            Scheduler.QueueTask(action, null);
+            _scheduler.QueueTask(action, null);
         }
 
         private void ProcessReceive(SocketAsyncEventArgs e)
@@ -352,7 +352,7 @@ namespace NetGear.Core.Connection
                     Close();
                 }
             };
-            Scheduler.QueueTask(action, e);
+            _scheduler.QueueTask(action, e);
         }
 
         internal byte[] GetMessageBytes(string message, out int length)

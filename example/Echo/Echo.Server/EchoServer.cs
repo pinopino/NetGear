@@ -36,8 +36,8 @@ namespace Echo.Server
             _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
             _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
 
-            _readAwait = new SocketAwaitable(_readEventArgs, Scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, Scheduler, debug);
+            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
         }
 
         public override async void Start()
@@ -46,8 +46,8 @@ namespace Echo.Server
             {
                 try
                 {
-                    var str = await ReadString();
-                    await Write(str);
+                    var bytes = await ReadBytes(12);
+                    await Write(bytes.Array, 0, bytes.Count, false);
                 }
                 catch (SocketException ex)
                 {
