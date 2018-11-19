@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 
 namespace Echo.Server
 {
@@ -7,11 +6,6 @@ namespace Echo.Server
     {
         static void Main(string[] args)
         {
-            int workerThreads, completionPortThreads;
-            ThreadPool.GetMaxThreads(out workerThreads, out completionPortThreads);
-            workerThreads = 20;
-            ThreadPool.SetMaxThreads(workerThreads, completionPortThreads);
-
             var server = new EchoServer("127.0.0.1", 5001);
             server.Start();
 
@@ -20,8 +14,6 @@ namespace Echo.Server
             server.Stop();
 
             Console.Read();
-
-            Console.WriteLine("Hello World!");
         }
     }
 }

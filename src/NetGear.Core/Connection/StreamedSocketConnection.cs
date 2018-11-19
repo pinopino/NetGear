@@ -5,14 +5,161 @@ using System.Buffers;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
-    public abstract class StreamedSocketConnection : BaseConnection
+    public class StreamedSocketConnection : BaseConnection
     {
+        class StreamDecoder
+        {
+            private enum ParseEnum
+            {
+                Received = 1,
+                Process_Body = 2,
+                Find_Body = 3
+            }
+
+            bool _debug;
+            ParseEnum _parseStatus;
+            byte[] headBuffer = null;
+            byte[] bodyBuffer = null;
+            int maxMessageLength = 512;
+            int headLength = 4;
+
+            int offset = 0;
+            int messageLength = 0;
+            int prefixBytesDoneCount = 0;
+            int prefixBytesDoneThisOp = 0;
+            int messageBytesDoneCount = 0;
+            int messageBytesDoneThisOp = 0;
+            int remainingBytesToProcess = 0;
+            StreamedSocketConnection _connection;
+
+            public StreamDecoder(StreamedSocketConnection connection, bool debug = false)
+            {
+                _debug = debug;
+                _parseStatus = ParseEnum.Received;
+                _connection = connection;
+            }
+
+            public void ProcessReceive(SocketAsyncEventArgs e)
+            {
+                Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
+                while (true)
+                {
+                    #region ParseLogic
+                    switch (_parseStatus)
+                    {
+                        case ParseEnum.Received:
+                            {
+                                messageBytesDoneThisOp = 0;
+                                var read = e.BytesTransferred;
+                                if (e.SocketError == SocketError.Success)
+                                {
+                                    // 接收到FIN
+                                    if (read == 0)
+                                    {
+                                        _connection.Close();
+                                        return;
+                                    }
+
+                                    remainingBytesToProcess = read;
+                                    _parseStatus = ParseEnum.Process_Body;
+                                }
+                                else
+                                {
+                                    _connection.Abort("e.SocketError != SocketError.Success");
+                                    return;
+                                }
+                            }
+                            break;
+                        case ParseEnum.Process_Body:
+                            {
+                                if (messageBytesDoneCount == 0)
+                                {
+                                    bodyBuffer = ArrayPool<byte>.Shared.Rent(messageLength);
+                                }
+
+                                if (remainingBytesToProcess >= messageLength - messageBytesDoneCount)
+                                {
+                                    Buffer.BlockCopy(
+                                        e.Buffer,
+                                        prefixBytesDoneThisOp + offset,
+                                        bodyBuffer,
+                                        messageBytesDoneCount,
+                                        messageLength - messageBytesDoneCount);
+
+                                    messageBytesDoneThisOp = messageLength - messageBytesDoneCount;
+                                    messageBytesDoneCount += messageBytesDoneThisOp;
+                                    remainingBytesToProcess = remainingBytesToProcess - messageBytesDoneThisOp;
+
+                                    _parseStatus = ParseEnum.Find_Body;
+                                }
+                                else
+                                {
+                                    Buffer.BlockCopy(
+                                        e.Buffer,
+                                        prefixBytesDoneThisOp + offset,
+                                        bodyBuffer,
+                                        messageBytesDoneCount,
+                                        remainingBytesToProcess);
+
+                                    messageBytesDoneThisOp = remainingBytesToProcess;
+                                    messageBytesDoneCount += messageBytesDoneThisOp;
+                                    remainingBytesToProcess = 0;
+
+                                    offset = 0;
+
+                                    _parseStatus = ParseEnum.Received;
+                                    // 开始新一次recv
+                                    _connection.DoReceive(e);
+                                    return;
+                                }
+                            }
+                            break;
+                        case ParseEnum.Find_Body:
+                            {
+                                if (remainingBytesToProcess == 0)
+                                {
+                                    messageLength = 0;
+                                    prefixBytesDoneCount = 0;
+                                    messageBytesDoneCount = 0;
+                                    _parseStatus = ParseEnum.Received;
+                                    // 开始新一次recv
+                                    _connection.DoReceive(e);
+                                    return;
+                                }
+                                else
+                                {
+                                    offset += (headLength + messageLength);
+
+                                    messageLength = 0;
+                                    prefixBytesDoneCount = 0;
+                                    prefixBytesDoneThisOp = 0;
+                                    messageBytesDoneCount = 0;
+                                    messageBytesDoneThisOp = 0;
+                                }
+                            }
+                            break;
+                    }
+                    #endregion
+                }
+            }
+
+            private void Print(string message)
+            {
+                if (_debug)
+                {
+                    Console.WriteLine(message);
+                }
+            }
+        }
+
         bool _disposed;
         byte[] _largebuffer;
+        StreamDecoder _decoder;
 
         protected SocketAsyncEventArgs _readEventArgs;
         protected SocketAsyncEventArgs _sendEventArgs;
@@ -23,11 +170,52 @@ namespace NetGear.Core.Connection
             : base(id, socket, debug)
         {
             _disposed = false;
+            _decoder = new StreamDecoder(this, debug);
         }
 
         ~StreamedSocketConnection()
         {
             Dispose(false);
+        }
+
+        public override void Start()
+        {
+            Action<object> action = (state) =>
+            {
+                try
+                {
+                    Interlocked.CompareExchange(ref _execStatus, STARTED, NOT_STARTED);
+                    var willRaiseEvent = _socket.ReceiveAsync(_readEventArgs);
+                    if (!willRaiseEvent)
+                    {
+                        ProcessReceive(_readEventArgs);
+                    }
+                }
+                catch (SocketException ex)
+                {
+                    Abort("远程连接被关闭");
+                }
+                catch
+                {
+                    Close();
+                }
+            };
+            _scheduler.QueueTask(action, null);
+        }
+
+        private void ProcessReceive(SocketAsyncEventArgs e)
+        {
+            if (_execStatus == STARTED)
+                _decoder.ProcessReceive(e);
+        }
+
+        private void DoReceive(SocketAsyncEventArgs e)
+        {
+            var willRaiseEvent = _socket.ReceiveAsync(e);
+            if (!willRaiseEvent)
+            {
+                ProcessReceive(e);
+            }
         }
 
         public async Task<int> ReadInt32()
