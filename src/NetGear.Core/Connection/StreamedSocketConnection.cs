@@ -20,6 +20,8 @@ namespace NetGear.Core.Connection
 
             public int Read;            
             public int Remain;
+
+            public Action<int> continuation;
         }
 
         bool _disposed;
@@ -40,7 +42,7 @@ namespace NetGear.Core.Connection
         }
 
         protected event EventHandler<int> OnReadInt32Complete;
-        protected event EventHandler<byte[]> OnReadBytesComplete;
+        protected event EventHandler<ArraySegment<byte>> OnReadBytesComplete;
         protected event EventHandler<string> OnReadStringComplete;
         protected event EventHandler<object> OnReadObjectComplete;
 
@@ -67,7 +69,15 @@ namespace NetGear.Core.Connection
                         }
                         else
                         {
-
+                            if (((Token)e.UserToken).continuation != null)
+                            {
+                                var length = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
+                                ((Token)e.UserToken).continuation(length);
+                            }
+                            else
+                            {
+                                InvokeCallBack(count, e);
+                            }
                         }
                     }
                     break;
@@ -94,10 +104,40 @@ namespace NetGear.Core.Connection
                         }
                         else
                         {
-
+                            InvokeCallBack(count, e);
                         }
                     }
                     break;
+                case 3: // readstring
+                    {
+                        
+                    }
+                    break;
+                case 4: // readobject
+                    {
+
+                    }
+                    break;
+            }
+        }
+
+        private void InvokeCallBack(int count, SocketAsyncEventArgs e)
+        {
+            if (count == sizeof(int))
+            {
+                var val = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
+                OnReadInt32Complete?.Invoke(null, val);
+            }
+            else
+            {
+                if (count > _readEventArgs.Buffer.Length)
+                {
+                    OnReadBytesComplete(null, _largebuffer);
+                }
+                else
+                {
+                    OnReadBytesComplete(null, new ArraySegment<byte>(e.Buffer, 0, count));
+                }
             }
         }
 
@@ -120,16 +160,17 @@ namespace NetGear.Core.Connection
 
         public void BeginReadString()
         {
-            // todo...
+            BeginFillBuffer(4, 0, length => BeginReadBytes(length));
         }
 
         public void BeginReadObject()
         {
-            BeginFillBuffer(4, 0);
+            // todo...
         }
 
-        private void BeginFillBuffer(int count, int read)
+        private void BeginFillBuffer(int count, int read, Action<int> continuation = null)
         {
+            ((Token)_readEventArgs.UserToken).Op = 1;
             ((Token)_readEventArgs.UserToken).Count = count;
             ((Token)_readEventArgs.UserToken).Read = read;
             _readEventArgs.SetBuffer(read, count - read);
@@ -143,7 +184,8 @@ namespace NetGear.Core.Connection
                 ReleaseLargeBuffer();
                 _largebuffer = ArrayPool<byte>.Shared.Rent(count);
             }
-            
+
+            ((Token)_readEventArgs.UserToken).Op = 2;
             ((Token)_readEventArgs.UserToken).Count = count;
             ((Token)_readEventArgs.UserToken).Read = read;
             ((Token)_readEventArgs.UserToken).Remain = remain;
