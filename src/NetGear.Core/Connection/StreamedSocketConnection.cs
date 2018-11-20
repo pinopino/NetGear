@@ -11,9 +11,22 @@ namespace NetGear.Core.Connection
 {
     public abstract class StreamedSocketConnection : BaseConnection
     {
+        public class Token
+        {
+            public int Op;
+            public string Tag;
+
+            public int Count;
+
+            public int Read;            
+            public int Remain;
+        }
+
         bool _disposed;
         byte[] _largebuffer;
 
+        // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
+        // 感觉上已经有点可以做IO合并的基础了？
         protected SocketAsyncEventArgs _readEventArgs;
         protected SocketAsyncEventArgs _sendEventArgs;
         protected SocketAwaitable _readAwait;
@@ -23,6 +36,120 @@ namespace NetGear.Core.Connection
             : base(id, socket, debug)
         {
             _disposed = false;
+            _readEventArgs.Completed += _readEventArgs_Completed;
+        }
+
+        protected event EventHandler<int> OnReadInt32Complete;
+        protected event EventHandler<byte[]> OnReadBytesComplete;
+        protected event EventHandler<string> OnReadStringComplete;
+        protected event EventHandler<object> OnReadObjectComplete;
+
+        private void _readEventArgs_Completed(object sender, SocketAsyncEventArgs e)
+        {
+            var op = ((Token)e.UserToken).Op;
+            switch (op)
+            {
+                case 1: // fillbuffer
+                    {
+                        if (e.BytesTransferred == 0)
+                        {
+                            // FIN here
+                            // todo: 添加处理逻辑
+                            return;
+                        }
+
+                        var read = ((Token)e.UserToken).Read;
+                        var count = ((Token)e.UserToken).Count;
+                        read += e.BytesTransferred;
+                        if (read < count)
+                        {
+                            BeginFillBuffer(count, read);
+                        }
+                        else
+                        {
+
+                        }
+                    }
+                    break;
+                case 2: // filllargebuffer
+                    {
+                        if (e.BytesTransferred == 0)
+                        {
+                            // FIN here
+                            // todo: 添加处理逻辑
+                            return;
+                        }
+
+                        var count = ((Token)e.UserToken).Count;
+                        var read = ((Token)e.UserToken).Read;
+                        var remain = ((Token)e.UserToken).Remain;
+                        var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
+                        var tmp = e.BytesTransferred < need ? e.BytesTransferred : need;
+                        Buffer.BlockCopy(e.Buffer, 0, _largebuffer, read, tmp);
+                        read += tmp;
+                        remain -= tmp;
+                        if (remain > 0)
+                        {
+                            BeginFillLargeBuffer(count, read, remain);
+                        }
+                        else
+                        {
+
+                        }
+                    }
+                    break;
+            }
+        }
+
+        public void BeginReadInt32()
+        {
+            BeginFillBuffer(4, 0);
+        }
+
+        public void BeginReadBytes(int count)
+        {
+            if (count > _readEventArgs.Buffer.Length)
+            {
+                BeginFillLargeBuffer(count, 0, count);
+            }
+            else
+            {
+                BeginFillBuffer(count, 0);
+            }
+        }
+
+        public void BeginReadString()
+        {
+            // todo...
+        }
+
+        public void BeginReadObject()
+        {
+            BeginFillBuffer(4, 0);
+        }
+
+        private void BeginFillBuffer(int count, int read)
+        {
+            ((Token)_readEventArgs.UserToken).Count = count;
+            ((Token)_readEventArgs.UserToken).Read = read;
+            _readEventArgs.SetBuffer(read, count - read);
+            _socket.ReceiveAsync(_readEventArgs);
+        }
+
+        private void BeginFillLargeBuffer(int count, int read, int remain)
+        {
+            if (count == remain)
+            {
+                ReleaseLargeBuffer();
+                _largebuffer = ArrayPool<byte>.Shared.Rent(count);
+            }
+            
+            ((Token)_readEventArgs.UserToken).Count = count;
+            ((Token)_readEventArgs.UserToken).Read = read;
+            ((Token)_readEventArgs.UserToken).Remain = remain;
+            var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
+            _readEventArgs.SetBuffer(0, need);
+            _socket.ReceiveAsync(_readEventArgs);
         }
 
         ~StreamedSocketConnection()
