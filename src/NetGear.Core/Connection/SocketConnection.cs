@@ -1,4 +1,5 @@
-﻿using NetGear.Core.Listener;
+﻿using NetGear.Core.Common;
+using NetGear.Core.Listener;
 using System;
 using System.Buffers;
 using System.Net.Sockets;
@@ -217,24 +218,14 @@ namespace NetGear.Core.Connection
             }
         }
 
-        bool _disposed;
         SocketListener _listener;
         FixHeaderDecoder _decoder;
-        PooledSocketAsyncEventArgs _pooledReadEventArgs;
-        PooledSocketAsyncEventArgs _pooledSendEventArgs;
 
         public SocketConnection(int id, Socket socket, SocketListener listener, bool debug = false)
             : base(id, socket, debug)
         {
-            _disposed = false;
             _decoder = new FixHeaderDecoder(this, debug);
             _listener = listener;
-
-            _pooledReadEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _pooledReadEventArgs.Completed += IO_Completed;
-
-            _pooledSendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _pooledSendEventArgs.Completed += IO_Completed;
         }
 
         ~SocketConnection()
@@ -251,10 +242,10 @@ namespace NetGear.Core.Connection
                 {
                     Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
                     Interlocked.CompareExchange(ref _execStatus, STARTED, NOT_STARTED);
-                    var willRaiseEvent = _socket.ReceiveAsync(_pooledReadEventArgs);
+                    var willRaiseEvent = _socket.ReceiveAsync(_readEventArgs);
                     if (!willRaiseEvent)
                     {
-                        ProcessReceive(_pooledReadEventArgs);
+                        ProcessReceive(_readEventArgs);
                     }
                 }
                 catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
@@ -267,6 +258,24 @@ namespace NetGear.Core.Connection
                 }
             };
             _scheduler.QueueTask(action, null);
+        }
+
+        protected override void InitSAEA()
+        {
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _readEventArgs.Completed += IO_Completed;
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _sendEventArgs.Completed += IO_Completed;
+        }
+
+        protected override void ReleaseSAEA()
+        {
+            _readEventArgs.UserToken = null;
+            _readEventArgs.Completed -= IO_Completed;
+            _sendEventArgs.UserToken = null;
+            _sendEventArgs.Completed -= IO_Completed;
+            _listener.SocketAsyncSendEventArgsPool.Put((IPooledWapper)_readEventArgs);
+            _listener.SocketAsyncReadEventArgsPool.Put((IPooledWapper)_sendEventArgs);
         }
 
         private void ProcessReceive(SocketAsyncEventArgs e)
@@ -292,29 +301,29 @@ namespace NetGear.Core.Connection
         internal void InnerSend(Package package)
         {
             if (package.RentFromPool)
-                _pooledSendEventArgs.UserToken = package.MessageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
+                _sendEventArgs.UserToken = package.MessageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             // todo: 缓冲区一次发送不完的情况处理
             if (package.NeedHead)
             {
-                Buffer.BlockCopy(BitConverter.GetBytes(package.DataLength), 0, _pooledSendEventArgs.Buffer, 0, 4);
-                Buffer.BlockCopy(package.MessageData, 0, _pooledSendEventArgs.Buffer, 4, package.DataLength);
+                Buffer.BlockCopy(BitConverter.GetBytes(package.DataLength), 0, _sendEventArgs.Buffer, 0, 4);
+                Buffer.BlockCopy(package.MessageData, 0, _sendEventArgs.Buffer, 4, package.DataLength);
                 // todo: abort和这里的send会有一个race condition，目前考虑的解决办法是abort那里自旋一段时间等
                 // 当次发送完毕了再予以关闭
-                _pooledSendEventArgs.SetBuffer(0, package.DataLength + 4);
+                _sendEventArgs.SetBuffer(0, package.DataLength + 4);
             }
             else
             {
-                Buffer.BlockCopy(package.MessageData, 0, _pooledSendEventArgs.Buffer, 0, package.DataLength);
+                Buffer.BlockCopy(package.MessageData, 0, _sendEventArgs.Buffer, 0, package.DataLength);
                 // todo: abort和这里的send会有一个race condition，目前考虑的解决办法是abort那里自旋一段时间等
                 // 当次发送完毕了再予以关闭
-                _pooledSendEventArgs.SetBuffer(0, package.DataLength);
+                _sendEventArgs.SetBuffer(0, package.DataLength);
             }
 
-            var willRaiseEvent = _socket.SendAsync(_pooledSendEventArgs);
+            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
             if (!willRaiseEvent)
             {
-                ProcessSend(_pooledSendEventArgs);
+                ProcessSend(_sendEventArgs);
             }
         }
 
@@ -368,31 +377,6 @@ namespace NetGear.Core.Connection
             Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
 
             return bytes;
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-            if (disposing)
-            {
-                // 清理托管资源
-                _pooledSendEventArgs.UserToken = null;
-                _pooledSendEventArgs.Completed -= IO_Completed;
-                _pooledReadEventArgs.UserToken = null;
-                _pooledReadEventArgs.Completed -= IO_Completed;
-                _listener.SocketAsyncSendEventArgsPool.Put(_pooledSendEventArgs);
-                _listener.SocketAsyncReadEventArgsPool.Put(_pooledReadEventArgs);
-            }
-
-            // 清理非托管资源
-
-            // 让类型知道自己已经被释放
-            _disposed = true;
-
-            base.Dispose();
         }
     }
 }

@@ -9,14 +9,11 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
-    // 说明：
+    // 说明：。。。
     public abstract class StreamedSocketConnection2 : BaseConnection
     {
         bool _disposed;
         byte[] _largebuffer;
-
-        protected SocketAsyncEventArgs _readEventArgs;
-        protected SocketAsyncEventArgs _sendEventArgs;
         protected SocketAwaitable _readAwait;
         protected SocketAwaitable _sendAwait;
 
@@ -24,6 +21,8 @@ namespace NetGear.Core.Connection
             : base(id, socket, debug)
         {
             _disposed = false;
+            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }
 
         ~StreamedSocketConnection2()
@@ -163,7 +162,7 @@ namespace NetGear.Core.Connection
 
         public async Task Write(float value)
         {
-            _sendEventArgs.SetBuffer(0, 1);
+            _sendEventArgs.SetBuffer(0, 4);
             UnsafeFloatBytes(value);
             await _socket.SendAsync(_sendAwait);
         }

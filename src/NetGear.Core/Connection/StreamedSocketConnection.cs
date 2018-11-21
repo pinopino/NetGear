@@ -41,12 +41,13 @@ namespace NetGear.Core.Connection
         bool _disposed;
         byte[] _largebuffer;
 
-        // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
-        // 感觉上已经有点可以做IO合并的基础了？
-        protected SocketAsyncEventArgs _readEventArgs;
-        protected SocketAsyncEventArgs _sendEventArgs;
-        protected SocketAwaitable _readAwait;
-        protected SocketAwaitable _sendAwait;
+        #region 事件
+        protected event EventHandler<int> OnReadInt32Complete;
+        protected event EventHandler<ArraySegment<byte>> OnReadBytesComplete;
+        protected event EventHandler<string> OnReadStringComplete;
+        protected event EventHandler<object> OnReadObjectComplete;
+        protected event EventHandler OnWriteComplete;
+        #endregion
 
         public StreamedSocketConnection(int id, Socket socket, bool debug = false)
             : base(id, socket, debug)
@@ -58,11 +59,10 @@ namespace NetGear.Core.Connection
             _sendEventArgs.Completed += _sendEventArgs_Completed;
         }
 
-        protected event EventHandler<int> OnReadInt32Complete;
-        protected event EventHandler<ArraySegment<byte>> OnReadBytesComplete;
-        protected event EventHandler<string> OnReadStringComplete;
-        protected event EventHandler<object> OnReadObjectComplete;
-        protected event EventHandler OnWriteComplete;
+        ~StreamedSocketConnection()
+        {
+            Dispose(false);
+        }
 
         private void _readEventArgs_Completed(object sender, SocketAsyncEventArgs e)
         {
@@ -249,11 +249,6 @@ namespace NetGear.Core.Connection
             var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
             _readEventArgs.SetBuffer(0, need);
             _socket.ReceiveAsync(_readEventArgs);
-        }
-
-        ~StreamedSocketConnection()
-        {
-            Dispose(false);
         }
 
         public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)

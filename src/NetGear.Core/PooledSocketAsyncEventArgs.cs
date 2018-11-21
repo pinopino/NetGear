@@ -1,10 +1,32 @@
 ﻿using NetGear.Core.Common;
 using System;
+using System.Buffers;
 using System.Net.Sockets;
 
 namespace NetGear.Core
 {
-    public sealed class PooledSocketAsyncEventArgs : SocketAsyncEventArgs, IPooledWapper
+    /// <summary>
+    /// G stands for Gear, NetGear :)
+    /// </summary>
+    public class GSocketAsyncEventArgs : SocketAsyncEventArgs
+    {
+        private bool _rentFromPool;
+        public bool RentFromPool { get { return _rentFromPool; } }
+
+        public void SetBuffer(int bufferSize)
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+            SetBuffer(buffer, 0, buffer.Length, true);
+        }
+
+        public void SetBuffer(byte[] buffer, int offset, int count, bool rentFromPool)
+        {
+            _rentFromPool = rentFromPool;
+            SetBuffer(buffer, offset, count);
+        }
+    }
+
+    public sealed class PooledSocketAsyncEventArgs : GSocketAsyncEventArgs, IPooledWapper
     {
         // 对于池化的对象来说，_disposed几乎没有什么作用，因为回到池后它还会再生，dispose可没有这种语义
         private bool _disposed;

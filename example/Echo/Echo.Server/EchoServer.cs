@@ -74,8 +74,6 @@ namespace Echo.Server
             if (disposing)
             {
                 // 清理托管资源
-                _readAwait.Dispose();
-                _sendAwait.Dispose();
                 _readEventArgs.UserToken = null;
                 _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();

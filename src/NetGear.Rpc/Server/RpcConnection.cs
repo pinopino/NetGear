@@ -1,4 +1,5 @@
 ﻿using NetGear.Core;
+using NetGear.Core.Common;
 using NetGear.Core.Connection;
 using System;
 using System.Net.Sockets;
@@ -17,12 +18,6 @@ namespace NetGear.Rpc.Server
         {
             _listener = listener;
             _server = server;
-
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-
-            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
         }
 
         public override async void Start()
@@ -44,6 +39,20 @@ namespace NetGear.Rpc.Server
                     break;
                 }
             }
+        }
+
+        protected override void InitSAEA()
+        {
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+        }
+
+        protected override void ReleaseSAEA()
+        {
+            _readEventArgs.UserToken = null;
+            _sendEventArgs.UserToken = null;
+            _listener.SocketAsyncSendEventArgsPool.Put((IPooledWapper)_readEventArgs);
+            _listener.SocketAsyncReadEventArgsPool.Put((IPooledWapper)_sendEventArgs);
         }
 
         private async Task ProcessInvocation()

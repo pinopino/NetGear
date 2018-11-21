@@ -1,5 +1,6 @@
 ﻿using NetGear.Core.Threading;
 using System;
+using System.Buffers;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -44,6 +45,10 @@ namespace NetGear.Core.Connection
         private static IScheduler[] _schedulers;
         private static int _concurrency;
         protected IScheduler _scheduler;
+        // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
+        // 感觉上已经有点可以做IO合并的基础了？
+        protected GSocketAsyncEventArgs _readEventArgs;
+        protected GSocketAsyncEventArgs _sendEventArgs;
 
         static BaseConnection()
         {
@@ -63,6 +68,7 @@ namespace NetGear.Core.Connection
             _execStatus = NOT_STARTED;
             _socket = socket;
             _scheduler = _schedulers[_id % _concurrency];
+            InitSAEA();
         }
 
         ~BaseConnection()
@@ -72,6 +78,33 @@ namespace NetGear.Core.Connection
         }
 
         public abstract void Start();
+
+        /// <summary>
+        /// 在继承类中覆写该方法时一定记得同时覆写ReleaseSAEA()方法，二者是配对的
+        /// </summary>
+        protected virtual void InitSAEA()
+        {
+            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(512);
+            _sendEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(512);
+        }
+
+        /// <summary>
+        /// 在继承类中覆写该方法时一定记得同时覆写InitSAEA()方法，二者是配对的
+        /// </summary>
+        protected virtual void ReleaseSAEA()
+        {
+            if (_readEventArgs.RentFromPool)
+                ArrayPool<byte>.Shared.Return(_readEventArgs.Buffer, true);
+            if (_sendEventArgs.RentFromPool)
+                ArrayPool<byte>.Shared.Return(_sendEventArgs.Buffer, true);
+
+            _readEventArgs.UserToken = null;
+            _readEventArgs.Dispose();
+            _sendEventArgs.UserToken = null;
+            _sendEventArgs.Dispose();
+        }
 
         public void Close()
         {
@@ -133,6 +166,7 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 _socket.Dispose();
+                ReleaseSAEA();
             }
 
             // 清理非托管资源
