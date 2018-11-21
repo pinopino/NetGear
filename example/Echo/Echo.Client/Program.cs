@@ -14,9 +14,7 @@ namespace Echo.Client
                 while (true)
                 {
                     Console.WriteLine("发送消息");
-                    conn.Write("hello world").Wait();
-                    var res = conn.ReadString().Result;
-                    Console.WriteLine("收到服务端响应：" + res);
+                    conn.BeginWrite("hello world");
                     Thread.Sleep(1000);
                 }
             }

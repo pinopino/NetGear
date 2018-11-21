@@ -8,7 +8,7 @@ using System.Threading;
 
 namespace NetGear.Rpc.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection
+    public class StreamedSocketClientConnection : StreamedSocketConnection2
     {
         int _id;
         bool _debug;

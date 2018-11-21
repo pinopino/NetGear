@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Rpc.Server
 {
-    public sealed class RpcConnection : StreamedSocketConnection
+    public sealed class RpcConnection : StreamedSocketConnection2
     {
         bool _disposed;
         RpcListener _listener;

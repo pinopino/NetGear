@@ -31,23 +31,26 @@ namespace Echo.Server
         public EchoConnection(int id, Socket socket, EchoListener listener, bool debug)
             : base(id, socket, debug)
         {
-            _listener = listener;            
+            _listener = listener;
 
             _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
             _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
 
-            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
+            OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
         }
 
-        public override async void Start()
+        private void EchoConnection_OnReadBytesComplete(object sender, ArraySegment<byte> e)
+        {
+            BeginWrite(e.Array, 0, e.Count, false);
+        }
+
+        public override void Start()
         {
             while (true)
             {
                 try
                 {
-                    var bytes = await ReadBytes(12);
-                    await Write(bytes.Array, 0, bytes.Count, false);
+                    BeginReadBytes(12);
                 }
                 catch (SocketException ex)
                 {
