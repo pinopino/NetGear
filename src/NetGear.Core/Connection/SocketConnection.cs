@@ -262,9 +262,9 @@ namespace NetGear.Core.Connection
 
         protected override void InitSAEA()
         {
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
             _readEventArgs.Completed += IO_Completed;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
             _sendEventArgs.Completed += IO_Completed;
         }
 
@@ -274,8 +274,8 @@ namespace NetGear.Core.Connection
             _readEventArgs.Completed -= IO_Completed;
             _sendEventArgs.UserToken = null;
             _sendEventArgs.Completed -= IO_Completed;
-            _listener.SocketAsyncSendEventArgsPool.Put((IPooledWapper)_readEventArgs);
-            _listener.SocketAsyncReadEventArgsPool.Put((IPooledWapper)_sendEventArgs);
+            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
+            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
         }
 
         private void ProcessReceive(SocketAsyncEventArgs e)

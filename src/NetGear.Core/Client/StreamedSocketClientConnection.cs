@@ -1,5 +1,6 @@
 ﻿using NetGear.Core.Connection;
 using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -29,6 +30,14 @@ namespace NetGear.Core.Client
         public override void Start()
         {
             // just do nothing
+        }
+
+        protected override void InitSAEA()
+        {
+            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
+            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public void Connect()

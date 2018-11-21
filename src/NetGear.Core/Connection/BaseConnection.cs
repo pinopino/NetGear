@@ -47,8 +47,8 @@ namespace NetGear.Core.Connection
         protected IScheduler _scheduler;
         // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
         // 感觉上已经有点可以做IO合并的基础了？
-        protected GSocketAsyncEventArgs _readEventArgs;
-        protected GSocketAsyncEventArgs _sendEventArgs;
+        protected SocketAsyncEventArgs _readEventArgs;
+        protected SocketAsyncEventArgs _sendEventArgs;
 
         static BaseConnection()
         {
@@ -80,29 +80,24 @@ namespace NetGear.Core.Connection
         public abstract void Start();
 
         /// <summary>
-        /// 在继承类中覆写该方法时一定记得同时覆写ReleaseSAEA()方法，二者是配对的
+        /// 在继承类中覆写该方法时务必确定ReleaseSAEA()方法的逻辑能够与之配对
         /// </summary>
         protected virtual void InitSAEA()
         {
-            _readEventArgs = new GSocketAsyncEventArgs();
-            _readEventArgs.SetBuffer(512);
-            _sendEventArgs = new GSocketAsyncEventArgs();
-            _readEventArgs.SetBuffer(512);
+            _readEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(512), 0, 512);
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(512), 0, 512);
         }
 
         /// <summary>
-        /// 在继承类中覆写该方法时一定记得同时覆写InitSAEA()方法，二者是配对的
+        /// 在继承类中覆写该方法时务必确定InitSAEA()方法的逻辑能够与之配对
         /// </summary>
         protected virtual void ReleaseSAEA()
         {
-            if (_readEventArgs.RentFromPool)
-                ArrayPool<byte>.Shared.Return(_readEventArgs.Buffer, true);
-            if (_sendEventArgs.RentFromPool)
-                ArrayPool<byte>.Shared.Return(_sendEventArgs.Buffer, true);
-
-            _readEventArgs.UserToken = null;
+            ArrayPool<byte>.Shared.Return(_readEventArgs.Buffer, true);
+            ArrayPool<byte>.Shared.Return(_sendEventArgs.Buffer, true);
             _readEventArgs.Dispose();
-            _sendEventArgs.UserToken = null;
             _sendEventArgs.Dispose();
         }
 

@@ -39,8 +39,8 @@ namespace NetGear.Core.Listener
         public event EventHandler<ConnectionInfo> OnConnectionClosed;
         #endregion
 
-        public ObjectPool<IPooledWapper> SocketAsyncReadEventArgsPool;
-        public ObjectPool<IPooledWapper> SocketAsyncSendEventArgsPool;
+        public ObjectPool<PooledSocketAsyncEventArgs> SocketAsyncReadEventArgsPool;
+        public ObjectPool<PooledSocketAsyncEventArgs> SocketAsyncSendEventArgsPool;
 
         public BaseListener(int maxConnectionCount, int bufferSize, bool debug = false)
         {
@@ -53,17 +53,17 @@ namespace NetGear.Core.Listener
             _connectionList = new ConcurrentDictionary<int, BaseConnection>();
 
             var min_retained = Math.Min(Environment.ProcessorCount, 16);
-            SocketAsyncReadEventArgsPool = new ObjectPool<IPooledWapper>(maxConnectionCount, min_retained, (pool) =>
+            SocketAsyncReadEventArgsPool = new ObjectPool<PooledSocketAsyncEventArgs>(maxConnectionCount, min_retained, (pool) =>
             {
                 var socketAsyncEventArgs = new PooledSocketAsyncEventArgs(pool);
-                socketAsyncEventArgs.SetBuffer(bufferSize);
+                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
                 return socketAsyncEventArgs;
             });
 
-            SocketAsyncSendEventArgsPool = new ObjectPool<IPooledWapper>(maxConnectionCount, min_retained, (pool) =>
+            SocketAsyncSendEventArgsPool = new ObjectPool<PooledSocketAsyncEventArgs>(maxConnectionCount, min_retained, (pool) =>
             {
                 var socketAsyncEventArgs = new PooledSocketAsyncEventArgs(pool);
-                socketAsyncEventArgs.SetBuffer(bufferSize);
+                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
                 return socketAsyncEventArgs;
             });
         }

@@ -246,19 +246,12 @@ namespace NetGear.Core.Client
 
         protected override void InitSAEA()
         {
-            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs = new SocketAsyncEventArgs();
             _readEventArgs.Completed += IO_Completed;
-            _readEventArgs.SetBuffer(_bufferSize);
-            _sendEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
+            _sendEventArgs = new SocketAsyncEventArgs();
             _sendEventArgs.Completed += IO_Completed;
-            _sendEventArgs.SetBuffer(_bufferSize);
-        }
-
-        protected override void ReleaseSAEA()
-        {
-            _readEventArgs.Completed -= IO_Completed;
-            _sendEventArgs.Completed -= IO_Completed;
-            base.ReleaseSAEA();
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public void Connect()

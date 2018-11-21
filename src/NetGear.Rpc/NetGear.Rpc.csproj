@@ -12,4 +12,8 @@
     <ProjectReference Include="..\NetGear.Core\NetGear.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="EAP\" />
+  </ItemGroup>
+
 </Project>
