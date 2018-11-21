@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Rpc.Server
 {
-    public sealed class RpcConnection : StreamedSocketConnection2
+    public sealed class RpcConnection : StreamedSocketConnection
     {
         bool _disposed;
         RpcListener _listener;
@@ -43,16 +43,16 @@ namespace NetGear.Rpc.Server
 
         protected override void InitSAEA()
         {
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
         }
 
         protected override void ReleaseSAEA()
         {
             _readEventArgs.UserToken = null;
             _sendEventArgs.UserToken = null;
-            _listener.SocketAsyncSendEventArgsPool.Put((IPooledWapper)_readEventArgs);
-            _listener.SocketAsyncReadEventArgsPool.Put((IPooledWapper)_sendEventArgs);
+            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
+            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
         }
 
         private async Task ProcessInvocation()

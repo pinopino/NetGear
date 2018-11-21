@@ -23,7 +23,7 @@ namespace Echo.Server
         }
     }
 
-    public sealed class EchoConnection : StreamedSocketConnection
+    public sealed class EchoConnection : StreamedSocketConnection2
     {
         bool _disposed;
         EchoListener _listener;
@@ -33,8 +33,8 @@ namespace Echo.Server
         {
             _listener = listener;
 
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
 
             OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
         }

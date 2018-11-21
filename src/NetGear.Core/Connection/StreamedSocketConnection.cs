@@ -5,58 +5,24 @@ using System.Buffers;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
+    // 说明：。。。
     public abstract class StreamedSocketConnection : BaseConnection
     {
-        public class Token
-        {
-            public int Op;
-            public string Tag;
-
-            public int Count;
-
-            public int Read;
-            public int Send;
-            public int Offset;
-            public int Remain;
-
-            public byte[] Bytes;
-            public bool RentFromPool;
-
-            public Action<int> Continuation;
-
-            public void Reset()
-            {
-                Op = 0;
-                Tag = string.Empty;
-                Count = 0;
-                Read = 0;
-                Remain = 0;
-                Continuation = null;
-            }
-        }
-
         bool _disposed;
         byte[] _largebuffer;
-
-        #region 事件
-        protected event EventHandler<int> OnReadInt32Complete;
-        protected event EventHandler<ArraySegment<byte>> OnReadBytesComplete;
-        protected event EventHandler<string> OnReadStringComplete;
-        protected event EventHandler<object> OnReadObjectComplete;
-        protected event EventHandler OnWriteComplete;
-        #endregion
+        protected SocketAwaitable _readAwait;
+        protected SocketAwaitable _sendAwait;
 
         public StreamedSocketConnection(int id, Socket socket, bool debug = false)
             : base(id, socket, debug)
         {
             _disposed = false;
-            _readEventArgs.UserToken = new Token();
-            _readEventArgs.Completed += _readEventArgs_Completed;
-            _sendEventArgs.UserToken = new Token();
-            _sendEventArgs.Completed += _sendEventArgs_Completed;
+            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }
 
         ~StreamedSocketConnection()
@@ -64,261 +30,124 @@ namespace NetGear.Core.Connection
             Dispose(false);
         }
 
-        private void _readEventArgs_Completed(object sender, SocketAsyncEventArgs e)
+        public async Task<int> ReadInt32()
         {
-            var op = ((Token)e.UserToken).Op;
-            switch (op)
-            {
-                case 1: // fillbuffer
-                    {
-                        if (e.BytesTransferred == 0)
-                        {
-                            // FIN here
-                            // todo: 添加处理逻辑
-                            return;
-                        }
-
-                        var read = ((Token)e.UserToken).Read;
-                        var count = ((Token)e.UserToken).Count;
-                        read += e.BytesTransferred;
-                        if (read < count)
-                        {
-                            BeginFillBuffer(count, read);
-                        }
-                        else
-                        {
-                            if (((Token)e.UserToken).Continuation != null)
-                            {
-                                var length = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
-                                ((Token)e.UserToken).Continuation(length);
-                            }
-                            else
-                            {
-                                InvokeCallBack(count, e);
-                            }
-                        }
-                    }
-                    break;
-                case 2: // filllargebuffer
-                    {
-                        if (e.BytesTransferred == 0)
-                        {
-                            // FIN here
-                            // todo: 添加处理逻辑
-                            return;
-                        }
-
-                        var count = ((Token)e.UserToken).Count;
-                        var read = ((Token)e.UserToken).Read;
-                        var remain = ((Token)e.UserToken).Remain;
-                        var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
-                        var tmp = e.BytesTransferred < need ? e.BytesTransferred : need;
-                        Buffer.BlockCopy(e.Buffer, 0, _largebuffer, read, tmp);
-                        read += tmp;
-                        remain -= tmp;
-                        if (remain > 0)
-                        {
-                            BeginFillLargeBuffer(count, read, remain);
-                        }
-                        else
-                        {
-                            InvokeCallBack(count, e);
-                        }
-                    }
-                    break;
-            }
+            await FillBuffer(4);
+            return (int)(_readEventArgs.Buffer[0] | _readEventArgs.Buffer[1] << 8 | _readEventArgs.Buffer[2] << 16 | _readEventArgs.Buffer[3] << 24);
         }
 
-        private void _sendEventArgs_Completed(object sender, SocketAsyncEventArgs e)
+        public async Task<ArraySegment<byte>> ReadBytes(int count)
         {
-            var op = ((Token)e.UserToken).Op;
-            switch (op)
-            {
-                case 1:
-                    {
-                        var count = ((Token)e.UserToken).Count;
-                        var send = ((Token)e.UserToken).Send;
-                        var remain = ((Token)e.UserToken).Remain;
-                        var offset = ((Token)e.UserToken).Offset;
-                        var buffer = ((Token)e.UserToken).Bytes;
-                        send += e.BytesTransferred;
-                        remain -= e.BytesTransferred;
-                        if (remain > 0)
-                        {
-                            var need = remain > e.Buffer.Length ? e.Buffer.Length : remain;
-                            e.SetBuffer(0, need);
-                            Buffer.BlockCopy(buffer, offset + send, e.Buffer, 0, need);
-                            _socket.SendAsync(e);
-                        }
-                        else
-                        {
-                            var rentFromPool = ((Token)e.UserToken).RentFromPool;
-                            if (rentFromPool)
-                            {
-                                ArrayPool<byte>.Shared.Return(buffer, true);
-                            }
-                        }
-                    }
-                    break;
-                case 2:
-                    {
-                        if (e.SocketError != SocketError.Success)
-                        {
-                            throw new Exception();
-                        }
-                    }
-                    break;
-            }
-            OnWriteComplete?.Invoke(null, null);
-        }
-
-        private void InvokeCallBack(int count, SocketAsyncEventArgs e)
-        {
-            if (count == sizeof(int))
-            {
-                var val = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
-                OnReadInt32Complete?.Invoke(null, val);
-            }
-            else
-            {
-                if (count > _readEventArgs.Buffer.Length)
-                {
-                    OnReadBytesComplete(null, _largebuffer);
-                }
-                else
-                {
-                    OnReadBytesComplete(null, new ArraySegment<byte>(e.Buffer, 0, count));
-                }
-            }
-        }
-
-        public void BeginReadInt32()
-        {
-            ((Token)_readEventArgs.UserToken).Reset();
-            BeginFillBuffer(4, 0);
-        }
-
-        public void BeginReadBytes(int count)
-        {
-            ((Token)_readEventArgs.UserToken).Reset();
             if (count > _readEventArgs.Buffer.Length)
             {
-                BeginFillLargeBuffer(count, 0, count);
+                await FillLargeBuffer(count);
+                return _largebuffer;
             }
             else
             {
-                BeginFillBuffer(count, 0);
+                await FillBuffer(count);
+                return new ArraySegment<byte>(_readEventArgs.Buffer, 0, count);
             }
         }
 
-        public void BeginReadString()
+        public async Task<string> ReadString()
         {
-            ((Token)_readEventArgs.UserToken).Reset();
-            BeginFillBuffer(4, 0, length => BeginReadBytes(length));
+            var length = await ReadInt32();
+            var bytes = await ReadBytes(length);
+
+            return Encoding.UTF8.GetString(bytes);
         }
 
-        public void BeginReadObject()
+        public async Task<T> ReadObject<T>(SerializeType serializeType = SerializeType.ProtoBuff)
         {
-            ((Token)_readEventArgs.UserToken).Reset();
-            BeginFillBuffer(4, 0, length => BeginReadBytes(length));
-        }
-
-        private void BeginFillBuffer(int count, int read, Action<int> continuation = null)
-        {
-            ((Token)_readEventArgs.UserToken).Op = 1;
-            ((Token)_readEventArgs.UserToken).Count = count;
-            ((Token)_readEventArgs.UserToken).Read = read;
-            if (continuation != null)
-                ((Token)_readEventArgs.UserToken).Continuation = continuation;
-            _readEventArgs.SetBuffer(read, count - read);
-            _socket.ReceiveAsync(_readEventArgs);
-        }
-
-        private void BeginFillLargeBuffer(int count, int read, int remain)
-        {
-            if (count == remain)
+            switch (serializeType)
             {
-                ReleaseLargeBuffer();
-                _largebuffer = ArrayPool<byte>.Shared.Rent(count);
+                case SerializeType.Json:
+                    {
+                        var length = await ReadInt32();
+                        var bytes = await ReadBytes(length);
+
+                        return bytes.Array.ToDeserializedObject<T>();
+                    }
+                case SerializeType.ProtoBuff:
+                    {
+                        var length = await ReadInt32();
+                        var bytes = await ReadBytes(length);
+
+                        T obj;
+                        using (MemoryStream stream = new MemoryStream(bytes.Array, 0, length))
+                        {
+                            obj = Serializer.Deserialize<T>(stream);
+                        }
+                        return obj;
+                    }
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        public async Task Write(byte[] buffer, int offset, int count, bool rentFromPool)
+        {
+            var sent = 0;
+            var need = 0;
+            var remain = count;
+            while (remain > 0)
+            {
+                need = remain > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : remain;
+                _sendEventArgs.SetBuffer(0, need);
+                Buffer.BlockCopy(buffer, offset + sent, _sendEventArgs.Buffer, 0, need);
+                await _socket.SendAsync(_sendAwait);
+                sent += _sendEventArgs.BytesTransferred;
+                remain -= _sendEventArgs.BytesTransferred;
             }
 
-            ((Token)_readEventArgs.UserToken).Op = 2;
-            ((Token)_readEventArgs.UserToken).Count = count;
-            ((Token)_readEventArgs.UserToken).Read = read;
-            ((Token)_readEventArgs.UserToken).Remain = remain;
-            var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
-            _readEventArgs.SetBuffer(0, need);
-            _socket.ReceiveAsync(_readEventArgs);
+            if (rentFromPool)
+            {
+                ArrayPool<byte>.Shared.Return(buffer, true);
+            }
         }
 
-        public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)
+        public async Task Write(bool value)
         {
-            ((Token)_sendEventArgs.UserToken).Op = 1;
-            ((Token)_sendEventArgs.UserToken).Bytes = buffer;
-            ((Token)_sendEventArgs.UserToken).Offset = offset;
-            ((Token)_sendEventArgs.UserToken).Count = count;
-            ((Token)_sendEventArgs.UserToken).Send = 0;
-            ((Token)_sendEventArgs.UserToken).Remain = count;
-            
-            var need = count > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : count;
-            _sendEventArgs.SetBuffer(0, need);
-            Buffer.BlockCopy(buffer, offset, _sendEventArgs.Buffer, 0, need);
-            _socket.SendAsync(_sendEventArgs);
-        }
-
-        public void BeginWrite(bool value)
-        {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 1);
             _sendEventArgs.Buffer[0] = (byte)(value ? 1 : 0);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(byte value)
+        public async Task Write(byte value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 1);
             _sendEventArgs.Buffer[0] = value;
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(double value)
+        public async Task Write(double value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 8);
             UnsafeDoubleBytes(value);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(short value)
+        public async Task Write(short value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 2);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(int value)
+        public async Task Write(int value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 4);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
             _sendEventArgs.Buffer[2] = (byte)(value >> 16);
             _sendEventArgs.Buffer[3] = (byte)(value >> 24);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(long value)
+        public async Task Write(long value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 8);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
@@ -328,32 +157,31 @@ namespace NetGear.Core.Connection
             _sendEventArgs.Buffer[5] = (byte)(value >> 40);
             _sendEventArgs.Buffer[6] = (byte)(value >> 48);
             _sendEventArgs.Buffer[7] = (byte)(value >> 56);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(float value)
+        public async Task Write(float value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            ((Token)_sendEventArgs.UserToken).Op = 1;
             _sendEventArgs.SetBuffer(0, 4);
             UnsafeFloatBytes(value);
-            _socket.SendAsync(_sendEventArgs);
+            await _socket.SendAsync(_sendAwait);
         }
 
-        public void BeginWrite(decimal value)
+        public async Task Write(decimal value)
         {
             throw new NotImplementedException();
         }
 
-        public void BeginWrite(string value)
+        public async Task Write(string value)
         {
             var body_bytes = Encoding.UTF8.GetBytes(value);
             var length = 0;
             var bytes = CalcBytes(body_bytes, out length);
-            BeginWrite(bytes, 0, length, true);
+
+            await Write(bytes, 0, length, true);
         }
 
-        public void BeginWrite(object value, SerializeType serializeType)
+        public async Task Write(object value, SerializeType serializeType = SerializeType.ProtoBuff)
         {
             switch (serializeType)
             {
@@ -363,7 +191,7 @@ namespace NetGear.Core.Connection
                         var length = 0;
                         var bytes = CalcBytes(body_bytes, out length);
 
-                        BeginWrite(bytes, 0, length, true);
+                        await Write(bytes, 0, length, true);
                     };
                     break;
                 case SerializeType.ProtoBuff:
@@ -382,7 +210,7 @@ namespace NetGear.Core.Connection
                             body_bytes[1] = length_bytes[1];
                             body_bytes[2] = length_bytes[2];
                             body_bytes[3] = length_bytes[3];
-                            BeginWrite(body_bytes, 0, (int)stream.Position, false);
+                            await Write(body_bytes, 0, (int)stream.Position, false);
                         }
                     }
                     break;
@@ -400,6 +228,48 @@ namespace NetGear.Core.Connection
             Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
 
             return bytes;
+        }
+
+        private async Task FillBuffer(int count)
+        {
+            var read = 0;
+            do
+            {
+                _readEventArgs.SetBuffer(read, count - read);
+                await _socket.ReceiveAsync(_readAwait);
+                if (_readEventArgs.BytesTransferred == 0)
+                {
+                    // FIN here
+                    // todo: 添加处理逻辑
+                    break;
+                }
+            }
+            while ((read += _readEventArgs.BytesTransferred) < count);
+        }
+
+        private async Task FillLargeBuffer(int count)
+        {
+            ReleaseLargeBuffer();
+            _largebuffer = ArrayPool<byte>.Shared.Rent(count);
+            var read = 0;
+            var need = 0;
+            var remain = count;
+            while (remain > 0)
+            {
+                need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
+                _readEventArgs.SetBuffer(0, need);
+                await _socket.ReceiveAsync(_readAwait);
+                if (_readEventArgs.BytesTransferred == 0)
+                {
+                    // FIN here
+                    // todo: 添加处理逻辑
+                    break;
+                }
+                var tmp = _readEventArgs.BytesTransferred < need ? _readEventArgs.BytesTransferred : need;
+                Buffer.BlockCopy(_readEventArgs.Buffer, 0, _largebuffer, read, tmp);
+                read += tmp;
+                remain -= tmp;
+            }
         }
 
         private unsafe void UnsafeDoubleBytes(double value)

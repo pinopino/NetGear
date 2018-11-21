@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace NetGear.Rpc.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection2
+    public class StreamedSocketClientConnection : StreamedSocketConnection
     {
         int _id;
         bool _debug;
