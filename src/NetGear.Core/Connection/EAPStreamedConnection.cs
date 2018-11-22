@@ -10,7 +10,7 @@ namespace NetGear.Core.Connection
 {
     public abstract class EAPStreamedConnection : BaseConnection
     {
-        public class Token
+        protected class Token
         {
             public int Op;
             public string Tag;
@@ -53,10 +53,6 @@ namespace NetGear.Core.Connection
             : base(id, socket, debug)
         {
             _disposed = false;
-            _readEventArgs.UserToken = new Token();
-            _readEventArgs.Completed += Read_Completed;
-            _sendEventArgs.UserToken = new Token();
-            _sendEventArgs.Completed += Send_Completed;
         }
 
         ~EAPStreamedConnection()
@@ -64,7 +60,7 @@ namespace NetGear.Core.Connection
             Dispose(false);
         }
 
-        private void Read_Completed(object sender, SocketAsyncEventArgs e)
+        protected void Read_Completed(object sender, SocketAsyncEventArgs e)
         {
             var op = ((Token)e.UserToken).Op;
             switch (op)
@@ -129,7 +125,7 @@ namespace NetGear.Core.Connection
             }
         }
 
-        private void Send_Completed(object sender, SocketAsyncEventArgs e)
+        protected void Send_Completed(object sender, SocketAsyncEventArgs e)
         {
             var op = ((Token)e.UserToken).Op;
             switch (op)
@@ -234,6 +230,7 @@ namespace NetGear.Core.Connection
             
             var need = count > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : count;
             _sendEventArgs.SetBuffer(0, need);
+            _sendEventArgs.Completed += Send_Completed;
             Buffer.BlockCopy(buffer, offset, _sendEventArgs.Buffer, 0, need);
             _socket.SendAsync(_sendEventArgs);
         }
@@ -443,16 +440,14 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 ReleaseLargeBuffer();
-                _readEventArgs.UserToken = null;
-                _readEventArgs.Completed -= Read_Completed;
-                _sendEventArgs.UserToken = null;
-                _sendEventArgs.Completed -= Send_Completed;
             }
 
             // 清理非托管资源
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

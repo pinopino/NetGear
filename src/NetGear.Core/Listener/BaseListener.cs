@@ -133,6 +133,7 @@ namespace NetGear.Core.Listener
             }
             catch (Exception ex)
             {
+                throw ex; // todo: 先throw方便调试，后期取消
                 Print(ex.Message);
             }
 

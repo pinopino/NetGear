@@ -1,4 +1,5 @@
-﻿using NetGear.Core.Connection;
+﻿using NetGear.Core;
+using NetGear.Core.Connection;
 using NetGear.Core.Listener;
 using System;
 using System.Net;
@@ -18,42 +19,77 @@ namespace Echo.Server
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
         {
-            return new EchoConnection(_connectedCount, e.AcceptSocket, _debug);
+            return new EchoConnection(_connectedCount, e.AcceptSocket, this, _debug);
         }
     }
 
     public sealed class EchoConnection : EAPStreamedConnection
     {
-        public EchoConnection(int id, Socket socket, bool debug)
+        bool _disposed;
+        EchoListener _listener;
+
+        public EchoConnection(int id, Socket socket, EchoListener listener, bool debug)
             : base(id, socket, debug)
         {
-            OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
+            _disposed = false;
+            _listener = listener;
+
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _readEventArgs.UserToken = new Token();
+            _readEventArgs.Completed += Read_Completed;
+
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+            _sendEventArgs.UserToken = new Token();
+            _sendEventArgs.Completed += Send_Completed;
         }
 
         private void EchoConnection_OnReadBytesComplete(object sender, ArraySegment<byte> e)
         {
+            Console.WriteLine("收到消息：" + System.Text.Encoding.UTF8.GetString(e.Array));
             BeginWrite(e.Array, 0, e.Count, false);
         }
 
         public override void Start()
         {
-            while (true)
+            OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
+            try
             {
-                try
-                {
-                    BeginReadBytes(12);
-                }
-                catch (SocketException ex)
-                {
-                    Abort("远程连接被关闭");
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Close();
-                    break;
-                }
+                BeginReadBytes(12);
             }
+            catch (SocketException ex)
+            {
+                Abort("远程连接被关闭");
+            }
+            catch (Exception ex)
+            {
+                Close();
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            if (disposing)
+            {
+                // 清理托管资源
+                _readEventArgs.Completed -= Read_Completed;
+                _sendEventArgs.Completed -= Send_Completed;
+                _readEventArgs.UserToken = null;
+                _sendEventArgs.UserToken = null;
+                ((PooledSocketAsyncEventArgs)_readEventArgs).Dispose();
+                ((PooledSocketAsyncEventArgs)_sendEventArgs).Dispose();
+            }
+
+            // 清理非托管资源
+
+            // 让类型知道自己已经被释放
+            _disposed = true;
+
+            // 调用基类dispose
+            base.Dispose();
         }
     }
 
