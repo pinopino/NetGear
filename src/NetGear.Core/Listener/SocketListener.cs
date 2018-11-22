@@ -10,7 +10,7 @@ namespace NetGear.Core.Listener
     public sealed class SocketListener : BaseListener
     {
         bool _debug;
-        bool _disposed;        
+        bool _disposed;
         Thread _sendMessageWorker;
         BlockingCollection<Package> _sendingQueue;
 
@@ -75,7 +75,7 @@ namespace NetGear.Core.Listener
             _sendingQueue.Add(package);
         }
 
-        public void Send(Connection.SocketConnection connection, byte[] messageData, int length, bool rentFromPool = true)
+        public void Send(SocketConnection connection, byte[] messageData, int length, bool rentFromPool = true)
         {
             var package = new Package
             {
@@ -113,7 +113,7 @@ namespace NetGear.Core.Listener
             package.Connection.InnerSend(package);
         }
 
-        public void MessageReceived(Connection.SocketConnection connection, byte[] messageData, int length)
+        public void MessageReceived(SocketConnection connection, byte[] messageData, int length)
         {
             OnMessageReceived?.Invoke(this, new Package { Connection = connection, MessageData = messageData, DataLength = length, RentFromPool = true });
         }

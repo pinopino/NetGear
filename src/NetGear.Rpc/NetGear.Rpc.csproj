@@ -5,12 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="EAP\**" />
-    <EmbeddedResource Remove="EAP\**" />
-    <None Remove="EAP\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="protobuf-net" Version="2.4.0" />
   </ItemGroup>
 
