@@ -9,25 +9,23 @@ namespace Echo.Server
     public sealed class EchoListener : BaseListener
     {
         bool _debug;
-        int _bufferSize;
 
         public EchoListener(int maxConnectionCount, int bufferSize, bool debug = false)
             : base(maxConnectionCount, bufferSize, debug)
         {
-            _debug = debug;
-            _bufferSize = bufferSize;
+            _debug = debug;            
         }
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
         {
-            return new EchoConnection(_connectedCount, e.AcceptSocket, _bufferSize, _debug);
+            return new EchoConnection(_connectedCount, e.AcceptSocket, _debug);
         }
     }
 
     public sealed class EchoConnection : EAPStreamedConnection
     {
-        public EchoConnection(int id, Socket socket, int bufferSize, bool debug)
-            : base(id, socket, bufferSize, debug)
+        public EchoConnection(int id, Socket socket, bool debug)
+            : base(id, socket, debug)
         {
             OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
         }

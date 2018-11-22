@@ -217,14 +217,20 @@ namespace NetGear.Core.Connection
             }
         }
 
+        bool _disposed;
         SocketListener _listener;
         FixHeaderDecoder _decoder;
 
-        public SocketConnection(int id, Socket socket, SocketListener listener, int bufferSize, bool debug = false)
-            : base(id, socket, bufferSize, debug)
+        public SocketConnection(int id, Socket socket, SocketListener listener, bool debug = false)
+            : base(id, socket, debug)
         {
+            _disposed = false;
             _listener = listener;
             _decoder = new FixHeaderDecoder(this, debug);
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+            _readEventArgs.Completed += IO_Completed;
+            _sendEventArgs.Completed += IO_Completed;
         }
 
         ~SocketConnection()
@@ -257,24 +263,6 @@ namespace NetGear.Core.Connection
                 }
             };
             _scheduler.QueueTask(action, null);
-        }
-
-        protected override void InitSAEA()
-        {
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
-            _readEventArgs.Completed += IO_Completed;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
-            _sendEventArgs.Completed += IO_Completed;
-        }
-
-        protected override void ReleaseSAEA()
-        {
-            _readEventArgs.UserToken = null;
-            _readEventArgs.Completed -= IO_Completed;
-            _sendEventArgs.UserToken = null;
-            _sendEventArgs.Completed -= IO_Completed;
-            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
-            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
         }
 
         private void ProcessReceive(SocketAsyncEventArgs e)
@@ -376,6 +364,32 @@ namespace NetGear.Core.Connection
             Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
 
             return bytes;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            if (disposing)
+            {
+                // 清理托管资源
+                _readEventArgs.UserToken = null;
+                _readEventArgs.Completed -= IO_Completed;
+                _sendEventArgs.UserToken = null;
+                _sendEventArgs.Completed -= IO_Completed;
+                ((PooledSocketAsyncEventArgs)_readEventArgs).Dispose();
+                ((PooledSocketAsyncEventArgs)_sendEventArgs).Dispose();
+            }
+
+            // 清理非托管资源
+
+            // 让类型知道自己已经被释放
+            _disposed = true;
+
+            // 调用基类dispose
+            base.Dispose();
         }
     }
 }

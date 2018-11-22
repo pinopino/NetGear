@@ -49,8 +49,8 @@ namespace NetGear.Core.Connection
         protected event EventHandler OnWriteComplete;
         #endregion
 
-        public EAPStreamedConnection(int id, Socket socket, int bufferSize, bool debug = false)
-            : base(id, socket, bufferSize, debug)
+        public EAPStreamedConnection(int id, Socket socket, bool debug = false)
+            : base(id, socket, debug)
         {
             _disposed = false;
             _readEventArgs.UserToken = new Token();

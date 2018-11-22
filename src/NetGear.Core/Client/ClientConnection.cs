@@ -221,22 +221,32 @@ namespace NetGear.Core.Client
 
         int _id;
         bool _debug;
+        bool _disposed;
         bool _connected;
+        int _bufferSize;
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
         FixHeaderDecoder _decoder;
 
         public ClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
-            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), bufferSize, debug)
+            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
             _debug = debug;
+            _disposed = false;
             _connected = false;
+            _bufferSize = bufferSize;
             _connectTimeout = 5 * 1000;
             _decoder = new FixHeaderDecoder(this, debug);
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
+
+            _readEventArgs = new SocketAsyncEventArgs();
             _readEventArgs.Completed += IO_Completed;
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
+
+            _sendEventArgs = new SocketAsyncEventArgs();
             _sendEventArgs.Completed += IO_Completed;
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public override void Start()
@@ -376,6 +386,32 @@ namespace NetGear.Core.Client
             Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
 
             return bytes;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            if (disposing)
+            {
+                // 清理托管资源
+                _readEventArgs.UserToken = null;
+                _readEventArgs.Completed -= IO_Completed;
+                _sendEventArgs.UserToken = null;
+                _sendEventArgs.Completed -= IO_Completed;
+                _readEventArgs.Dispose();
+                _sendEventArgs.Dispose();
+            }
+
+            // 清理非托管资源
+
+            // 让类型知道自己已经被释放
+            _disposed = true;
+
+            // 调用基类dispose
+            base.Dispose();
         }
     }
 }

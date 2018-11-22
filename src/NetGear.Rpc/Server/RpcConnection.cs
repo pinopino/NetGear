@@ -8,14 +8,20 @@ namespace NetGear.Rpc.Server
 {
     public sealed class RpcConnection : StreamedConnection
     {
+        bool _disposed;
         RpcServer _server;
         RpcListener _listener;
 
-        public RpcConnection(int id, RpcServer server, Socket socket, RpcListener listener, int bufferSize, bool debug)
-            : base(id, socket, bufferSize, debug)
+        public RpcConnection(int id, RpcServer server, Socket socket, RpcListener listener, bool debug)
+            : base(id, socket, debug)
         {
-            _listener = listener;
+            _disposed = false;
             _server = server;
+            _listener = listener;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }
 
         public override async void Start()
@@ -26,31 +32,17 @@ namespace NetGear.Rpc.Server
                 {
                     await ProcessInvocation();
                 }
-                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                catch (SocketException ex)
                 {
                     Abort("远程连接被关闭");
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     Close();
                     break;
                 }
             }
-        }
-
-        protected override void InitSAEA()
-        {
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
-        }
-
-        protected override void ReleaseSAEA()
-        {
-            _readEventArgs.UserToken = null;
-            _sendEventArgs.UserToken = null;
-            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
-            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
         }
 
         private async Task ProcessInvocation()
@@ -60,7 +52,7 @@ namespace NetGear.Rpc.Server
 
             // 准备调用方法
             ServiceInfo invokedInstance;
-            if ( _server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
+            if (_server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
             {
                 int index = obj.MethodIndex;
                 object[] parameters = new object[obj.Parameters.Count];
@@ -94,6 +86,32 @@ namespace NetGear.Rpc.Server
             }
             else
                 await Write(new InvokeReturn { ReturnType = (int)MessageType.UnknownMethod });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            if (disposing)
+            {
+                // 清理托管资源
+                _readAwait.Dispose();
+                _sendAwait.Dispose();
+                _readEventArgs.UserToken = null;
+                _sendEventArgs.UserToken = null;
+                ((PooledSocketAsyncEventArgs)_readEventArgs).Dispose();
+                ((PooledSocketAsyncEventArgs)_sendEventArgs).Dispose();
+            }
+
+            // 清理非托管资源
+
+            // 让类型知道自己已经被释放
+            _disposed = true;
+
+            // 调用基类dispose
+            base.Dispose();
         }
     }
 }

@@ -11,17 +11,20 @@ namespace NetGear.Core.Client
         int _id;
         bool _debug;
         bool _connected;
+        int _bufferSize;
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
         public EAPStreamedClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
-            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), bufferSize, debug)
+            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
             _debug = debug;
             _connected = false;
+            _bufferSize = bufferSize;
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
+
         }
 
         public override void Start()

@@ -16,12 +16,10 @@ namespace NetGear.Core.Connection
         protected SocketAwaitable _readAwait;
         protected SocketAwaitable _sendAwait;
 
-        public StreamedConnection(int id, Socket socket, int bufferSize, bool debug = false)
-            : base(id, socket, bufferSize, debug)
+        public StreamedConnection(int id, Socket socket, bool debug = false)
+            : base(id, socket, debug)
         {
             _disposed = false;
-            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }
 
         ~StreamedConnection()
@@ -312,14 +310,14 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 ReleaseLargeBuffer();
-                _readAwait.Dispose();
-                _sendAwait.Dispose();
             }
 
             // 清理非托管资源
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

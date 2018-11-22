@@ -33,8 +33,7 @@ namespace NetGear.Core.Connection
     {
         int _id;
         bool _debug;
-        bool _disposed;
-        int _bufferSize;
+        bool _disposed;        
 
         protected const int NOT_STARTED = 1;
         protected const int STARTED = 2;
@@ -66,16 +65,14 @@ namespace NetGear.Core.Connection
             }
         }
 
-        public BaseConnection(int id, Socket socket, int bufferSize, bool debug)
+        public BaseConnection(int id, Socket socket, bool debug)
         {
             _id = id;
             _debug = debug;
             _disposed = false;
-            _execStatus = NOT_STARTED;
             _socket = socket;
-            _bufferSize = bufferSize;
+            _execStatus = NOT_STARTED;
             _scheduler = _schedulers[_id % _concurrency];
-            InitSAEA();
         }
 
         ~BaseConnection()
@@ -85,28 +82,6 @@ namespace NetGear.Core.Connection
         }
 
         public abstract void Start();
-
-        /// <summary>
-        /// 在继承类中覆写该方法时务必确定ReleaseSAEA()方法的逻辑能够与之配对
-        /// </summary>
-        protected virtual void InitSAEA()
-        {
-            _readEventArgs = new SocketAsyncEventArgs();
-            _sendEventArgs = new SocketAsyncEventArgs();
-            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-        }
-
-        /// <summary>
-        /// 在继承类中覆写该方法时务必确定InitSAEA()方法的逻辑能够与之配对
-        /// </summary>
-        protected virtual void ReleaseSAEA()
-        {
-            ArrayPool<byte>.Shared.Return(_readEventArgs.Buffer, true);
-            ArrayPool<byte>.Shared.Return(_sendEventArgs.Buffer, true);
-            _readEventArgs.Dispose();
-            _sendEventArgs.Dispose();
-        }
 
         public void Close()
         {
@@ -168,7 +143,6 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 _socket.Dispose();
-                ReleaseSAEA();
             }
 
             // 清理非托管资源
