@@ -1,5 +1,4 @@
-﻿using NetGear.Core;
-using NetGear.Core.Connection;
+﻿using NetGear.Core.Connection;
 using NetGear.Core.Listener;
 using System;
 using System.Net;
@@ -25,17 +24,12 @@ namespace Echo.Server
 
     public sealed class EchoConnection : EAPStreamedConnection
     {
-        bool _disposed;
         EchoListener _listener;
 
         public EchoConnection(int id, Socket socket, EchoListener listener, bool debug)
             : base(id, socket, debug)
         {
             _listener = listener;
-
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
-
             OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
         }
 
@@ -63,28 +57,6 @@ namespace Echo.Server
                     break;
                 }
             }
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-            if (disposing)
-            {
-                // 清理托管资源
-                _readEventArgs.UserToken = null;
-                _sendEventArgs.UserToken = null;
-                _readEventArgs.Dispose();
-                _sendEventArgs.Dispose();
-            }
-
-            // 清理非托管资源
-
-            // 让类型知道自己已经被释放
-            _disposed = true;
-            base.Dispose();
         }
     }
 
