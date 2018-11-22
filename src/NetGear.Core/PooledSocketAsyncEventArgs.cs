@@ -22,7 +22,7 @@ namespace NetGear.Core
 
         ~PooledSocketAsyncEventArgs()
         {
-            //必须为false
+            // 必须为false
             Dispose(false);
         }
 

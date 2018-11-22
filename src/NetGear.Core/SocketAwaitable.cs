@@ -110,6 +110,7 @@ namespace NetGear.Core
             if (disposing)
             {
                 // 清理托管资源
+                m_eventArgs.UserToken = null;
                 m_eventArgs.Completed -= IO_Completed;
             }
 

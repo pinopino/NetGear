@@ -216,19 +216,6 @@ namespace NetGear.Core.Connection
             }
         }
 
-        private byte[] CalcBytes(byte[] body_bytes, out int length)
-        {
-            var head = body_bytes.Length;
-            var head_bytes = BitConverter.GetBytes(head);
-            length = head_bytes.Length + body_bytes.Length;
-            var bytes = ArrayPool<byte>.Shared.Rent(length);
-
-            Buffer.BlockCopy(head_bytes, 0, bytes, 0, head_bytes.Length);
-            Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
-
-            return bytes;
-        }
-
         private async Task FillBuffer(int count)
         {
             var read = 0;
@@ -269,6 +256,19 @@ namespace NetGear.Core.Connection
                 read += tmp;
                 remain -= tmp;
             }
+        }
+
+        private byte[] CalcBytes(byte[] body_bytes, out int length)
+        {
+            var head = body_bytes.Length;
+            var head_bytes = BitConverter.GetBytes(head);
+            length = head_bytes.Length + body_bytes.Length;
+            var bytes = ArrayPool<byte>.Shared.Rent(length);
+
+            Buffer.BlockCopy(head_bytes, 0, bytes, 0, head_bytes.Length);
+            Buffer.BlockCopy(body_bytes, 0, bytes, head_bytes.Length, body_bytes.Length);
+
+            return bytes;
         }
 
         private unsafe void UnsafeDoubleBytes(double value)
@@ -312,6 +312,8 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 ReleaseLargeBuffer();
+                _readAwait.Dispose();
+                _sendAwait.Dispose();
             }
 
             // 清理非托管资源

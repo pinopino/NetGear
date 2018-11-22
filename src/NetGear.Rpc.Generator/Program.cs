@@ -264,7 +264,7 @@ namespace NetGear.Rpc.Generator
 
                 var proxy_type = (type.Name + "Proxy").Substring(1);
                 var proxy_derive = type.Name;
-                var client_type = "StreamedRpcClient";
+                var client_type = "RpcClient";
                 var out_str = string.Format(File.ReadAllText("ServiceTemplate.txt"),
                     head_note,
                     name_space_ref,

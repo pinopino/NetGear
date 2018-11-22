@@ -4,18 +4,18 @@ using System.Collections.Generic;
 
 namespace NetGear.Rpc.Client
 {
-    public class StreamedRpcClient
+    public class RpcClient
     {
         bool _debug;
-        static ObjectPool<StreamedRpcConnection> _connectionPool;
+        static ObjectPool<RpcConnection> _connectionPool;
         static Dictionary<Type, byte> _parameterTypes;
 
-        public StreamedRpcClient(Type serviceType, string address, int port)
+        public RpcClient(Type serviceType, string address, int port)
         {
             _debug = false;
             var num = Math.Min(Environment.ProcessorCount, 16);
             var count = 0;
-            _connectionPool = new ObjectPool<StreamedRpcConnection>(num * 4, num, pool => new StreamedRpcConnection(pool, ++count, address, port, 256, _debug));
+            _connectionPool = new ObjectPool<RpcConnection>(num * 4, num, pool => new RpcConnection(pool, ++count, address, port, 256, _debug));
         }
 
         public object InvokeMethod(ulong hash, int index, params object[] parameters)

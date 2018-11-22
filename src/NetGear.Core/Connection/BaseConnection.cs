@@ -25,7 +25,7 @@ namespace NetGear.Core.Connection
 
         public override string ToString()
         {
-            return string.Format("Id：{0}，描述：[{1}]，时间：{2}", Connection.Num, AbortReason, Connection.Time);
+            return string.Format("Id：{0}，Abort原因：[{1}]，时间：{2}", Connection.Num, AbortReason, Connection.Time);
         }
     }
 
@@ -78,7 +78,7 @@ namespace NetGear.Core.Connection
 
         ~BaseConnection()
         {
-            //必须为false
+            // 必须为false
             Dispose(false);
         }
 

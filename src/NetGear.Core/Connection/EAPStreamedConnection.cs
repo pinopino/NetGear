@@ -54,9 +54,9 @@ namespace NetGear.Core.Connection
         {
             _disposed = false;
             _readEventArgs.UserToken = new Token();
-            _readEventArgs.Completed += _readEventArgs_Completed;
+            _readEventArgs.Completed += Read_Completed;
             _sendEventArgs.UserToken = new Token();
-            _sendEventArgs.Completed += _sendEventArgs_Completed;
+            _sendEventArgs.Completed += Send_Completed;
         }
 
         ~EAPStreamedConnection()
@@ -64,7 +64,7 @@ namespace NetGear.Core.Connection
             Dispose(false);
         }
 
-        private void _readEventArgs_Completed(object sender, SocketAsyncEventArgs e)
+        private void Read_Completed(object sender, SocketAsyncEventArgs e)
         {
             var op = ((Token)e.UserToken).Op;
             switch (op)
@@ -129,7 +129,7 @@ namespace NetGear.Core.Connection
             }
         }
 
-        private void _sendEventArgs_Completed(object sender, SocketAsyncEventArgs e)
+        private void Send_Completed(object sender, SocketAsyncEventArgs e)
         {
             var op = ((Token)e.UserToken).Op;
             switch (op)
@@ -221,34 +221,6 @@ namespace NetGear.Core.Connection
         {
             ((Token)_readEventArgs.UserToken).Reset();
             BeginFillBuffer(4, 0, length => BeginReadBytes(length));
-        }
-
-        private void BeginFillBuffer(int count, int read, Action<int> continuation = null)
-        {
-            ((Token)_readEventArgs.UserToken).Op = 1;
-            ((Token)_readEventArgs.UserToken).Count = count;
-            ((Token)_readEventArgs.UserToken).Read = read;
-            if (continuation != null)
-                ((Token)_readEventArgs.UserToken).Continuation = continuation;
-            _readEventArgs.SetBuffer(read, count - read);
-            _socket.ReceiveAsync(_readEventArgs);
-        }
-
-        private void BeginFillLargeBuffer(int count, int read, int remain)
-        {
-            if (count == remain)
-            {
-                ReleaseLargeBuffer();
-                _largebuffer = ArrayPool<byte>.Shared.Rent(count);
-            }
-
-            ((Token)_readEventArgs.UserToken).Op = 2;
-            ((Token)_readEventArgs.UserToken).Count = count;
-            ((Token)_readEventArgs.UserToken).Read = read;
-            ((Token)_readEventArgs.UserToken).Remain = remain;
-            var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
-            _readEventArgs.SetBuffer(0, need);
-            _socket.ReceiveAsync(_readEventArgs);
         }
 
         public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)
@@ -389,6 +361,34 @@ namespace NetGear.Core.Connection
             }
         }
 
+        private void BeginFillBuffer(int count, int read, Action<int> continuation = null)
+        {
+            ((Token)_readEventArgs.UserToken).Op = 1;
+            ((Token)_readEventArgs.UserToken).Count = count;
+            ((Token)_readEventArgs.UserToken).Read = read;
+            if (continuation != null)
+                ((Token)_readEventArgs.UserToken).Continuation = continuation;
+            _readEventArgs.SetBuffer(read, count - read);
+            _socket.ReceiveAsync(_readEventArgs);
+        }
+
+        private void BeginFillLargeBuffer(int count, int read, int remain)
+        {
+            if (count == remain)
+            {
+                ReleaseLargeBuffer();
+                _largebuffer = ArrayPool<byte>.Shared.Rent(count);
+            }
+
+            ((Token)_readEventArgs.UserToken).Op = 2;
+            ((Token)_readEventArgs.UserToken).Count = count;
+            ((Token)_readEventArgs.UserToken).Read = read;
+            ((Token)_readEventArgs.UserToken).Remain = remain;
+            var need = remain > _readEventArgs.Buffer.Length ? _readEventArgs.Buffer.Length : remain;
+            _readEventArgs.SetBuffer(0, need);
+            _socket.ReceiveAsync(_readEventArgs);
+        }
+
         private byte[] CalcBytes(byte[] body_bytes, out int length)
         {
             var head = body_bytes.Length;
@@ -443,6 +443,10 @@ namespace NetGear.Core.Connection
             {
                 // 清理托管资源
                 ReleaseLargeBuffer();
+                _readEventArgs.UserToken = null;
+                _readEventArgs.Completed -= Read_Completed;
+                _sendEventArgs.UserToken = null;
+                _sendEventArgs.Completed -= Send_Completed;
             }
 
             // 清理非托管资源

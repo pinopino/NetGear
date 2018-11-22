@@ -1,5 +1,5 @@
 /*
- *  2018-11-22 11:04:29
+ *  2018-11-22 15:09:25
  *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
  */
 
@@ -14,11 +14,11 @@ namespace NetGear.Example.Rpc
 	public class TestContractProxy : BaseProxy, ITestContract
 	{
 		ulong _serviceHash;
-		StreamedRpcClient _client;
+		RpcClient _client;
 
 		public TestContractProxy(string address, int port)
 		{
-			_client = new StreamedRpcClient(typeof(ITestContract), address, port);
+			_client = new RpcClient(typeof(ITestContract), address, port);
 			_serviceHash = CalculateHash(typeof(ITestContract).FullName);
 		}
 

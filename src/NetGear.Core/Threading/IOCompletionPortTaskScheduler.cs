@@ -15,22 +15,11 @@ using System.Threading;
 
 namespace NetGear.Core.Threading
 {
-    public interface IScheduler
-    {
-        void QueueTask(Action<object> action, object state);
-    }
-
     // 说明：原版本来自于微软，这里作了修改去除了task，试图消除巨量task带来gc压力
     // todo: Kestrel中控制线程的方式跟这个在思路上是很类似的，比较感兴趣二者的性能对比
     /// <summary>Provides a TaskScheduler that uses an I/O completion port for concurrency control.</summary>
     public sealed class IOCompletionPortTaskScheduler : IScheduler, IDisposable
     {
-        private struct Work
-        {
-            public Action<object> Callback;
-            public object State;
-        }
-
         /// <summary>The queue of tasks to be scheduled.</summary>
         private readonly ConcurrentQueue<Work> m_tasks;
         /// <summary>The I/O completion port to use for concurrency control.</summary>
@@ -187,61 +176,6 @@ namespace NetGear.Core.Threading
             [DllImport("kernel32.dll", SetLastError = true)]
             private static extern Boolean PostQueuedCompletionStatus(
                 SafeFileHandle completionPort, IntPtr dwNumberOfBytesTransferred, IntPtr dwCompletionKey, IntPtr lpOverlapped);
-        }
-    }
-
-    public class IOQueue : IScheduler
-    {
-        private static readonly WaitCallback _doWorkCallback = s => ((IOQueue)s).DoWork();
-
-        private readonly object _workSync = new object();
-        private readonly ConcurrentQueue<Work> _workItems = new ConcurrentQueue<Work>();
-        private bool _doingWork;
-
-        public void QueueTask(Action<object> action, object state)
-        {
-            var work = new Work
-            {
-                Callback = action,
-                State = state
-            };
-
-            _workItems.Enqueue(work);
-
-            lock (_workSync)
-            {
-                if (!_doingWork)
-                {
-                    System.Threading.ThreadPool.QueueUserWorkItem(_doWorkCallback, this);
-                    _doingWork = true;
-                }
-            }
-        }
-
-        private void DoWork()
-        {
-            while (true)
-            {
-                while (_workItems.TryDequeue(out Work item))
-                {
-                    item.Callback(item.State);
-                }
-
-                lock (_workSync)
-                {
-                    if (_workItems.IsEmpty)
-                    {
-                        _doingWork = false;
-                        return;
-                    }
-                }
-            }
-        }
-
-        private struct Work
-        {
-            public Action<object> Callback;
-            public object State;
         }
     }
 }

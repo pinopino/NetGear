@@ -229,7 +229,7 @@ namespace NetGear.Core.Connection
 
         ~SocketConnection()
         {
-            //必须为false
+            // 必须为false
             Dispose(false);
         }
 
