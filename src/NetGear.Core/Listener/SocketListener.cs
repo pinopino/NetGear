@@ -11,6 +11,7 @@ namespace NetGear.Core.Listener
     {
         bool _debug;
         bool _disposed;
+        int _bufferSize;
         Thread _sendMessageWorker;
         BlockingCollection<Package> _sendingQueue;
 
@@ -25,6 +26,7 @@ namespace NetGear.Core.Listener
         {
             _debug = debug;
             _disposed = false;
+            _bufferSize = bufferSize;
             _sendingQueue = new BlockingCollection<Package>();
             _sendMessageWorker = new Thread(PorcessMessageQueue);
         }
@@ -58,10 +60,10 @@ namespace NetGear.Core.Listener
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
         {
-            return new Connection.SocketConnection(_connectedCount, e.AcceptSocket, this, _debug);
+            return new SocketConnection(_connectedCount, e.AcceptSocket, this, _bufferSize, _debug);
         }
 
-        public void Send(Connection.SocketConnection connection, string message)
+        public void Send(SocketConnection connection, string message)
         {
             var length = 0;
             var bytes = connection.GetMessageBytes(message, out length);

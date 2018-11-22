@@ -220,11 +220,11 @@ namespace NetGear.Core.Connection
         SocketListener _listener;
         FixHeaderDecoder _decoder;
 
-        public SocketConnection(int id, Socket socket, SocketListener listener, bool debug = false)
-            : base(id, socket, debug)
+        public SocketConnection(int id, Socket socket, SocketListener listener, int bufferSize, bool debug = false)
+            : base(id, socket, bufferSize, debug)
         {
-            _decoder = new FixHeaderDecoder(this, debug);
             _listener = listener;
+            _decoder = new FixHeaderDecoder(this, debug);
         }
 
         ~SocketConnection()

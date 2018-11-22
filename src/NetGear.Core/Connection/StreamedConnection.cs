@@ -16,8 +16,8 @@ namespace NetGear.Core.Connection
         protected SocketAwaitable _readAwait;
         protected SocketAwaitable _sendAwait;
 
-        public StreamedConnection(int id, Socket socket, bool debug = false)
-            : base(id, socket, debug)
+        public StreamedConnection(int id, Socket socket, int bufferSize, bool debug = false)
+            : base(id, socket, bufferSize, debug)
         {
             _disposed = false;
             _readAwait = new SocketAwaitable(_readEventArgs, null, debug);

@@ -9,27 +9,26 @@ namespace Echo.Server
     public sealed class EchoListener : BaseListener
     {
         bool _debug;
+        int _bufferSize;
 
         public EchoListener(int maxConnectionCount, int bufferSize, bool debug = false)
             : base(maxConnectionCount, bufferSize, debug)
         {
             _debug = debug;
+            _bufferSize = bufferSize;
         }
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
         {
-            return new EchoConnection(_connectedCount, e.AcceptSocket, this, _debug);
+            return new EchoConnection(_connectedCount, e.AcceptSocket, _bufferSize, _debug);
         }
     }
 
     public sealed class EchoConnection : EAPStreamedConnection
     {
-        EchoListener _listener;
-
-        public EchoConnection(int id, Socket socket, EchoListener listener, bool debug)
-            : base(id, socket, debug)
+        public EchoConnection(int id, Socket socket, int bufferSize, bool debug)
+            : base(id, socket, bufferSize, debug)
         {
-            _listener = listener;
             OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
         }
 
@@ -51,7 +50,7 @@ namespace Echo.Server
                     Abort("远程连接被关闭");
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     Close();
                     break;

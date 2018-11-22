@@ -56,18 +56,18 @@ namespace Rpc.Server
     {
         static void Main(string[] args)
         {
-            var server = new RpcServer("127.0.0.1", 5000);
+            var address = "127.0.0.1";
+            var port = 5000;
+            var server = new RpcServer(address, port);
 
             var simpleContract = new DataContractImpl();
             var complexContract = new ComplexContractImpl();
-
             server.AddService<IDataContract>(simpleContract);
             Console.WriteLine("注册服务：IDataContract成功");
             server.AddService<ITestContract>(complexContract);
             Console.WriteLine("注册服务：ITestContract成功");
 
             server.Start();
-
             Console.WriteLine("按任意键关闭server...");
             Console.ReadLine();
             server.Stop();

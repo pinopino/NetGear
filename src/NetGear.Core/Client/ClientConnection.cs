@@ -222,36 +222,26 @@ namespace NetGear.Core.Client
         int _id;
         bool _debug;
         bool _connected;
-        int _bufferSize;
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
         FixHeaderDecoder _decoder;
 
         public ClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
-            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
+            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), bufferSize, debug)
         {
             _id = id;
             _debug = debug;
             _connected = false;
-            _bufferSize = bufferSize;
             _connectTimeout = 5 * 1000;
             _decoder = new FixHeaderDecoder(this, debug);
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
+            _readEventArgs.Completed += IO_Completed;
+            _sendEventArgs.Completed += IO_Completed;
         }
 
         public override void Start()
         {
             // just do nothing
-        }
-
-        protected override void InitSAEA()
-        {
-            _readEventArgs = new SocketAsyncEventArgs();
-            _readEventArgs.Completed += IO_Completed;
-            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendEventArgs = new SocketAsyncEventArgs();
-            _sendEventArgs.Completed += IO_Completed;
-            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public void Connect()

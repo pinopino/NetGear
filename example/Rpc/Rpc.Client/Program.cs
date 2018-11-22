@@ -1,6 +1,5 @@
 ﻿using NetGear.Example.Rpc;
 using System;
-using System.Net;
 using System.Collections.Generic;
 
 namespace Rpc.Client
@@ -9,11 +8,13 @@ namespace Rpc.Client
     {
         static void Main(string[] args)
         {
-            var proxy1 = new DataContractProxy("127.0.0.1", 5000);
+            var address = "127.0.0.1";
+            var port = 5000;
+            var proxy1 = new DataContractProxy(address, port);
             var ret1 = proxy1.AddMoney(1, 2);
             Console.WriteLine("调用IDataContract.AddMoney方法成功，返回值：" + ret1);
 
-            var proxy2 = new TestContractProxy("127.0.0.1", 5000);
+            var proxy2 = new TestContractProxy(address, port);
             var ret2 = proxy2.Get(Guid.NewGuid(), "label", 0.01d, 1);
             Console.WriteLine("调用ITestContract.Get方法成功，返回值：" + ret2);
 

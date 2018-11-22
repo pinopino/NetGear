@@ -34,6 +34,7 @@ namespace NetGear.Core.Connection
         int _id;
         bool _debug;
         bool _disposed;
+        int _bufferSize;
 
         protected const int NOT_STARTED = 1;
         protected const int STARTED = 2;
@@ -65,13 +66,14 @@ namespace NetGear.Core.Connection
             }
         }
 
-        public BaseConnection(int id, Socket socket, bool debug)
+        public BaseConnection(int id, Socket socket, int bufferSize, bool debug)
         {
             _id = id;
             _debug = debug;
             _disposed = false;
             _execStatus = NOT_STARTED;
             _socket = socket;
+            _bufferSize = bufferSize;
             _scheduler = _schedulers[_id % _concurrency];
             InitSAEA();
         }
@@ -91,8 +93,8 @@ namespace NetGear.Core.Connection
         {
             _readEventArgs = new SocketAsyncEventArgs();
             _sendEventArgs = new SocketAsyncEventArgs();
-            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(512), 0, 512);
-            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(512), 0, 512);
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         /// <summary>

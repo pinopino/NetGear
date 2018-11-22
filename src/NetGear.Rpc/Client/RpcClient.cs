@@ -13,8 +13,8 @@ namespace NetGear.Rpc.Client
         public RpcClient(Type serviceType, string address, int port)
         {
             _debug = false;
-            var num = Math.Min(Environment.ProcessorCount, 16);
             var count = 0;
+            var num = Math.Min(Environment.ProcessorCount, 16);
             _connectionPool = new ObjectPool<RpcConnection>(num * 4, num, pool => new RpcConnection(pool, ++count, address, port, 256, _debug));
         }
 

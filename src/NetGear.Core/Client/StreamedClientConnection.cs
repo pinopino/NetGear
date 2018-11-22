@@ -1,6 +1,5 @@
 ﻿using NetGear.Core.Connection;
 using System;
-using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -12,17 +11,15 @@ namespace NetGear.Core.Client
         int _id;
         bool _debug;
         bool _connected;
-        int _bufferSize;
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
         public StreamedClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
-            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
+            : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), bufferSize, debug)
         {
             _id = id;
             _debug = debug;
             _connected = false;
-            _bufferSize = bufferSize;
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
         }
@@ -30,14 +27,6 @@ namespace NetGear.Core.Client
         public override void Start()
         {
             // just do nothing
-        }
-
-        protected override void InitSAEA()
-        {
-            _readEventArgs = new SocketAsyncEventArgs();
-            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendEventArgs = new SocketAsyncEventArgs();
-            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public void Connect()

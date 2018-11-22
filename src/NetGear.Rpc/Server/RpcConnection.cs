@@ -8,11 +8,11 @@ namespace NetGear.Rpc.Server
 {
     public sealed class RpcConnection : StreamedConnection
     {
-        RpcListener _listener;
         RpcServer _server;
+        RpcListener _listener;
 
-        public RpcConnection(int id, RpcServer server, Socket socket, RpcListener listener, bool debug)
-            : base(id, socket, debug)
+        public RpcConnection(int id, RpcServer server, Socket socket, RpcListener listener, int bufferSize, bool debug)
+            : base(id, socket, bufferSize, debug)
         {
             _listener = listener;
             _server = server;
@@ -49,8 +49,8 @@ namespace NetGear.Rpc.Server
         {
             _readEventArgs.UserToken = null;
             _sendEventArgs.UserToken = null;
-            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
-            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
+            _listener.SocketAsyncReadEventArgsPool.Put((PooledSocketAsyncEventArgs)_readEventArgs);
+            _listener.SocketAsyncSendEventArgsPool.Put((PooledSocketAsyncEventArgs)_sendEventArgs);
         }
 
         private async Task ProcessInvocation()
