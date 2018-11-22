@@ -15,6 +15,7 @@ namespace NetGear.Core
         {
             if (pool == null)
                 throw new ArgumentNullException("pool");
+
             _pool = pool;
             _disposed = false;
         }

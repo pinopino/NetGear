@@ -9,10 +9,10 @@ namespace NetGear.Rpc.Client
         int _id;
         // 对于池化的对象来说，_disposed几乎没有什么作用，因为回到池后它还会再生，dispose可没有这种语义
         bool _disposed;        
-        ObjectPool<IPooledWapper> _pool;
+        ObjectPool<StreamedRpcConnection> _pool;
         public DateTime LastGetTime { set; get; }
 
-        public StreamedRpcConnection(ObjectPool<IPooledWapper> pool, int id, string address, int port, int bufferSize, bool debug = false)
+        public StreamedRpcConnection(ObjectPool<StreamedRpcConnection> pool, int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, address, port, bufferSize, debug)
         {
             if (pool == null)

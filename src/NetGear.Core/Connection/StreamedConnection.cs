@@ -9,14 +9,14 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
-    public abstract class StreamedSocketConnection : BaseConnection
+    public abstract class StreamedConnection : BaseConnection
     {
         bool _disposed;
         byte[] _largebuffer;
         protected SocketAwaitable _readAwait;
         protected SocketAwaitable _sendAwait;
 
-        public StreamedSocketConnection(int id, Socket socket, bool debug = false)
+        public StreamedConnection(int id, Socket socket, bool debug = false)
             : base(id, socket, debug)
         {
             _disposed = false;
@@ -24,7 +24,7 @@ namespace NetGear.Core.Connection
             _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }
 
-        ~StreamedSocketConnection()
+        ~StreamedConnection()
         {
             Dispose(false);
         }

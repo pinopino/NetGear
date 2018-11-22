@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace NetGear.Core.Client
 {
-    public class StreamedClientConnection : StreamedSocketConnection
+    public class StreamedClientConnection : StreamedConnection
     {
         int _id;
         bool _debug;

@@ -1,10 +1,9 @@
 /*
- *  2018-11-12 22:43:19
+ *  2018-11-22 11:04:29
  *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
  */
 
 using NetGear.Rpc;
-using ProtoBuf;
 using System;
 using System.Collections.Generic;
 

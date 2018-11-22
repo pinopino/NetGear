@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace NetGear.Rpc.Server
 {
-    public sealed class RpcConnection : StreamedSocketConnection
+    public sealed class RpcConnection : StreamedConnection
     {
-        bool _disposed;
         RpcListener _listener;
         RpcServer _server;
 
@@ -95,30 +94,6 @@ namespace NetGear.Rpc.Server
             }
             else
                 await Write(new InvokeReturn { ReturnType = (int)MessageType.UnknownMethod });
-        }
-
-        protected override void Dispose(bool disposing)
-        {
-            if (_disposed)
-            {
-                return;
-            }
-            if (disposing)
-            {
-                // 清理托管资源
-                _readAwait.Dispose();
-                _sendAwait.Dispose();
-                _readEventArgs.UserToken = null;
-                _sendEventArgs.UserToken = null;
-                _readEventArgs.Dispose();
-                _sendEventArgs.Dispose();
-            }
-
-            // 清理非托管资源
-
-            // 让类型知道自己已经被释放
-            _disposed = true;
-            base.Dispose();
         }
     }
 }
