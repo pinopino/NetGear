@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace NetGear.Core.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection2
+    public class StreamedSocketClientConnection2 : EAPStreamedConnection
     {
         int _id;
         bool _debug;
@@ -16,7 +16,7 @@ namespace NetGear.Core.Client
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
-        public StreamedSocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public StreamedSocketClientConnection2(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;

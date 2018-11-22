@@ -8,7 +8,7 @@ using System.Text;
 
 namespace NetGear.Core.Connection
 {
-    public abstract class StreamedSocketConnection2 : BaseConnection
+    public abstract class EAPStreamedConnection : BaseConnection
     {
         public class Token
         {
@@ -49,7 +49,7 @@ namespace NetGear.Core.Connection
         protected event EventHandler OnWriteComplete;
         #endregion
 
-        public StreamedSocketConnection2(int id, Socket socket, bool debug = false)
+        public EAPStreamedConnection(int id, Socket socket, bool debug = false)
             : base(id, socket, debug)
         {
             _disposed = false;
@@ -59,7 +59,7 @@ namespace NetGear.Core.Connection
             _sendEventArgs.Completed += _sendEventArgs_Completed;
         }
 
-        ~StreamedSocketConnection2()
+        ~EAPStreamedConnection()
         {
             Dispose(false);
         }

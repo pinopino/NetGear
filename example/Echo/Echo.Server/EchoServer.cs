@@ -23,7 +23,7 @@ namespace Echo.Server
         }
     }
 
-    public sealed class EchoConnection : StreamedSocketConnection2
+    public sealed class EchoConnection : EAPStreamedConnection
     {
         bool _disposed;
         EchoListener _listener;

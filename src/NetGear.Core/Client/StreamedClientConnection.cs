@@ -1,12 +1,13 @@
 ﻿using NetGear.Core.Connection;
 using System;
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 
-namespace NetGear.Rpc.Client
+namespace NetGear.Core.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection
+    public class StreamedClientConnection : StreamedSocketConnection
     {
         int _id;
         bool _debug;
@@ -15,7 +16,7 @@ namespace NetGear.Rpc.Client
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
-        public StreamedSocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public StreamedClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
@@ -29,6 +30,14 @@ namespace NetGear.Rpc.Client
         public override void Start()
         {
             // just do nothing
+        }
+
+        protected override void InitSAEA()
+        {
+            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
+            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
 
         public void Connect()
@@ -70,3 +79,4 @@ namespace NetGear.Rpc.Client
         }
     }
 }
+

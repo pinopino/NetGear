@@ -1,5 +1,4 @@
-﻿using NetGear.Core.Common;
-using NetGear.Core.Listener;
+﻿using NetGear.Core.Listener;
 using System;
 using System.Buffers;
 using System.Net.Sockets;

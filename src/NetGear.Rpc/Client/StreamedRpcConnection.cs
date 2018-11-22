@@ -1,9 +1,10 @@
-﻿using NetGear.Core.Common;
+﻿using NetGear.Core.Client;
+using NetGear.Core.Common;
 using System;
 
 namespace NetGear.Rpc.Client
 {
-    public sealed class StreamedRpcConnection : StreamedSocketClientConnection, IPooledWapper
+    public sealed class StreamedRpcConnection : StreamedClientConnection, IPooledWapper
     {
         int _id;
         // 对于池化的对象来说，_disposed几乎没有什么作用，因为回到池后它还会再生，dispose可没有这种语义

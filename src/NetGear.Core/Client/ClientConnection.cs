@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core.Client
 {
-    public class SocketClientConnection : BaseConnection
+    public class ClientConnection : BaseConnection
     {
         class FixHeaderDecoder
         {
@@ -35,9 +35,9 @@ namespace NetGear.Core.Client
             int messageBytesDoneCount = 0;
             int messageBytesDoneThisOp = 0;
             int remainingBytesToProcess = 0;
-            SocketClientConnection _connection;
+            ClientConnection _connection;
 
-            public FixHeaderDecoder(SocketClientConnection connection, bool debug = false)
+            public FixHeaderDecoder(ClientConnection connection, bool debug = false)
             {
                 _debug = debug;
                 _parseStatus = ParseEnum.Received;
@@ -227,7 +227,7 @@ namespace NetGear.Core.Client
         IPEndPoint _remoteEndPoint;
         FixHeaderDecoder _decoder;
 
-        public SocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public ClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;

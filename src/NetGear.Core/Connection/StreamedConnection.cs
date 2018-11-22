@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core.Connection
 {
-    // 说明：。。。
     public abstract class StreamedSocketConnection : BaseConnection
     {
         bool _disposed;

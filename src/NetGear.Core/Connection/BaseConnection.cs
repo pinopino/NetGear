@@ -22,6 +22,11 @@ namespace NetGear.Core.Connection
     {
         public string AbortReason { set; get; }
         public ConnectionInfo Connection { set; get; }
+
+        public override string ToString()
+        {
+            return string.Format("Id：{0}，描述：[{1}]，时间：{2}", Connection.Num, AbortReason, Connection.Time);
+        }
     }
 
     public abstract class BaseConnection : IDisposable
@@ -60,7 +65,7 @@ namespace NetGear.Core.Connection
             }
         }
 
-        public BaseConnection(int id, Socket socket, bool debug = false)
+        public BaseConnection(int id, Socket socket, bool debug)
         {
             _id = id;
             _debug = debug;

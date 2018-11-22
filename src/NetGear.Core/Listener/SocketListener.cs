@@ -58,10 +58,10 @@ namespace NetGear.Core.Listener
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
         {
-            return new SocketConnection(_connectedCount, e.AcceptSocket, this, _debug);
+            return new Connection.SocketConnection(_connectedCount, e.AcceptSocket, this, _debug);
         }
 
-        public void Send(SocketConnection connection, string message)
+        public void Send(Connection.SocketConnection connection, string message)
         {
             var length = 0;
             var bytes = connection.GetMessageBytes(message, out length);
@@ -75,7 +75,7 @@ namespace NetGear.Core.Listener
             _sendingQueue.Add(package);
         }
 
-        public void Send(SocketConnection connection, byte[] messageData, int length, bool rentFromPool = true)
+        public void Send(Connection.SocketConnection connection, byte[] messageData, int length, bool rentFromPool = true)
         {
             var package = new Package
             {
@@ -113,7 +113,7 @@ namespace NetGear.Core.Listener
             package.Connection.InnerSend(package);
         }
 
-        public void MessageReceived(SocketConnection connection, byte[] messageData, int length)
+        public void MessageReceived(Connection.SocketConnection connection, byte[] messageData, int length)
         {
             OnMessageReceived?.Invoke(this, new Package { Connection = connection, MessageData = messageData, DataLength = length, RentFromPool = true });
         }
