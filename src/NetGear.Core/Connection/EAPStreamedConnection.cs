@@ -192,96 +192,60 @@ namespace NetGear.Core.Connection
 
         public void BeginReadInt32()
         {
-            ((Token)_readEventArgs.UserToken).Reset();
             BeginFillBuffer(4);
         }
 
         public void BeginReadString()
         {
-            ((Token)_readEventArgs.UserToken).Reset();
             BeginFillBuffer(4, length => BeginReadBytes(length));
         }
 
         public void BeginReadObject()
         {
-            ((Token)_readEventArgs.UserToken).Reset();
             BeginFillBuffer(4, length => BeginReadBytes(length));
         }
 
         public void BeginReadBytes(int count)
         {
-            ((Token)_readEventArgs.UserToken).Reset();
             BeginFillBuffer(count);
         }
 
         public void BeginWrite(bool value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 1);
             _sendEventArgs.Buffer[0] = (byte)(value ? 1 : 0);
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 1, false);
         }
 
         public void BeginWrite(byte value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 1);
             _sendEventArgs.Buffer[0] = value;
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 1, false);
         }
 
         public void BeginWrite(double value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 8);
             UnsafeDoubleBytes(value);
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 8, false);
         }
 
         public void BeginWrite(short value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 2);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 2, false);
         }
 
         public void BeginWrite(int value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 4);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
             _sendEventArgs.Buffer[2] = (byte)(value >> 16);
             _sendEventArgs.Buffer[3] = (byte)(value >> 24);
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 4, false);
         }
 
         public void BeginWrite(long value)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
-            _sendEventArgs.SetBuffer(0, 8);
             _sendEventArgs.Buffer[0] = (byte)value;
             _sendEventArgs.Buffer[1] = (byte)(value >> 8);
             _sendEventArgs.Buffer[2] = (byte)(value >> 16);
@@ -290,11 +254,7 @@ namespace NetGear.Core.Connection
             _sendEventArgs.Buffer[5] = (byte)(value >> 40);
             _sendEventArgs.Buffer[6] = (byte)(value >> 48);
             _sendEventArgs.Buffer[7] = (byte)(value >> 56);
-            var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
-            if (!willRaiseEvent)
-            {
-                Send_Completed(null, _sendEventArgs);
-            }
+            BeginWrite(null, 0, 8, false);
         }
 
         public void BeginWrite(float value)
@@ -374,6 +334,7 @@ namespace NetGear.Core.Connection
 
         private void BeginFillBuffer(int count, Action<int> continuation = null)
         {
+            ((Token)_readEventArgs.UserToken).Reset();
             var large = count > _readEventArgs.Buffer.Length;
             if (large)
             {
