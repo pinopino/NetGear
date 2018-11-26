@@ -229,6 +229,8 @@ namespace NetGear.Core.Connection
             _decoder = new FixHeaderDecoder(this, debug);
             _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
             _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+			_readEventArgs.UserToken = new Token();
+			_sendEventArgs.UserToken = new Token();
             _readEventArgs.Completed += IO_Completed;
             _sendEventArgs.Completed += IO_Completed;
         }

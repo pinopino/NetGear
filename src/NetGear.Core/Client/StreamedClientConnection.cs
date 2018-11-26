@@ -28,11 +28,11 @@ namespace NetGear.Core.Client
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs = new SocketAsyncEventArgs();
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
             _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
 
-            _sendEventArgs = new GSocketAsyncEventArgs();
+            _sendEventArgs = new SocketAsyncEventArgs();
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
             _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
         }

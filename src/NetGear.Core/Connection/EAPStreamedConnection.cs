@@ -57,6 +57,10 @@ namespace NetGear.Core.Connection
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
                         {
+							// 说明：小心此处可能引起的stack-dive，不过目前更愿意保持这种写法
+							// 相当于inline掉了这次调用自然效率会更高些
+							// todo: 可以试着记录堆栈go deeper的次数，超过设置的值时再考虑post
+							// 到IOQueue上去
                             Read_Completed(sender, e);
                         }
                     }

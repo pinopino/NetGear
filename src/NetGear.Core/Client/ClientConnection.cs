@@ -400,8 +400,8 @@ namespace NetGear.Core.Client
             {
                 // 清理托管资源
                 _readEventArgs.UserToken = null;
-                _readEventArgs.Completed -= IO_Completed;
                 _sendEventArgs.UserToken = null;
+				_readEventArgs.Completed -= IO_Completed;
                 _sendEventArgs.Completed -= IO_Completed;
                 _readEventArgs.Dispose();
                 _sendEventArgs.Dispose();
