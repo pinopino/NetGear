@@ -288,7 +288,7 @@ namespace NetGear.Core.Connection
         internal void InnerSend(Package package)
         {
             if (package.RentFromPool)
-                _sendEventArgs.UserToken = package.MessageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
+                _sendEventArgs.UserToken.Bytes = package.MessageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             // todo: 缓冲区一次发送不完的情况处理
             if (package.NeedHead)

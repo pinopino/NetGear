@@ -28,12 +28,12 @@ namespace NetGear.Core.Client
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
             
-            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs = new GSocketAsyncEventArgs();
             _readEventArgs.UserToken = new Token();
             _readEventArgs.Completed += Read_Completed;
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
 
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new GSocketAsyncEventArgs();
             _sendEventArgs.UserToken = new Token();
             _sendEventArgs.Completed += Send_Completed;
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);

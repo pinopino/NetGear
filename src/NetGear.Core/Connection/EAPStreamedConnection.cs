@@ -10,27 +10,6 @@ namespace NetGear.Core.Connection
 {
     public abstract class EAPStreamedConnection : BaseConnection
     {
-        protected class Token
-        {
-            public int Count;
-
-            public int Read;
-            public int Send;
-            public int Offset;
-
-            public byte[] Bytes;
-            public bool RentFromPool;
-
-            public Action<int> Continuation;
-
-            public void Reset()
-            {
-                Count = 0;
-                Read = 0;
-                Continuation = null;
-            }
-        }
-
         bool _disposed;
         byte[] _largebuffer;
 
@@ -53,7 +32,7 @@ namespace NetGear.Core.Connection
             Dispose(false);
         }
 
-        protected void Read_Completed(object sender, SocketAsyncEventArgs e)
+        protected void Read_Completed(object sender, GSocketAsyncEventArgs e)
         {
             try
             {
@@ -64,16 +43,16 @@ namespace NetGear.Core.Connection
                     return;
                 }
 
-                var count = ((Token)e.UserToken).Count;
-                var read = ((Token)e.UserToken).Read;
-                var continuation = ((Token)e.UserToken).Continuation;
+                var count = e.UserToken.Count;
+                var read = e.UserToken.Read;
+                var continuation = e.UserToken.Continuation;
                 read += e.BytesTransferred;
                 var remain = count - read;
                 if (count <= e.Buffer.Length)
                 {
                     if (remain > 0)
                     {
-                        ((Token)e.UserToken).Read = read;
+                        e.UserToken.Read = read;
                         e.SetBuffer(read, remain);
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
@@ -98,10 +77,10 @@ namespace NetGear.Core.Connection
                 {
                     var need = remain > e.Buffer.Length ? e.Buffer.Length : remain;
                     var tmp = e.BytesTransferred < need ? e.BytesTransferred : need;
-                    Buffer.BlockCopy(e.Buffer, 0, _largebuffer, ((Token)e.UserToken).Read, e.BytesTransferred);
+                    Buffer.BlockCopy(e.Buffer, 0, _largebuffer, e.UserToken.Read, e.BytesTransferred);
                     if (remain > 0)
                     {
-                        ((Token)e.UserToken).Read = read;
+                        e.UserToken.Read = read;
                         e.SetBuffer(0, need);
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
@@ -129,14 +108,14 @@ namespace NetGear.Core.Connection
             }
         }
 
-        protected void Send_Completed(object sender, SocketAsyncEventArgs e)
+        protected void Send_Completed(object sender, GSocketAsyncEventArgs e)
         {
             try
             {
-                var buffer = ((Token)e.UserToken).Bytes;
-                var offset = ((Token)e.UserToken).Offset;
-                var count = ((Token)e.UserToken).Count;
-                var send = ((Token)e.UserToken).Send;
+                var buffer = e.UserToken.Bytes;
+                var offset = e.UserToken.Offset;
+                var count = e.UserToken.Count;
+                var send = e.UserToken.Send;
                 var remain = count - send;
                 send += e.BytesTransferred;
                 remain -= e.BytesTransferred;
@@ -156,7 +135,7 @@ namespace NetGear.Core.Connection
                 }
                 else
                 {
-                    var rentFromPool = ((Token)e.UserToken).RentFromPool;
+                    var rentFromPool = e.UserToken.RentFromPool;
                     if (rentFromPool)
                     {
                         ArrayPool<byte>.Shared.Return(buffer, true);
@@ -170,7 +149,7 @@ namespace NetGear.Core.Connection
             }
         }
 
-        private void InvokeReadCallBack(int count, SocketAsyncEventArgs e)
+        private void InvokeReadCallBack(int count, GSocketAsyncEventArgs e)
         {
             if (count == sizeof(int))
             {
@@ -314,14 +293,14 @@ namespace NetGear.Core.Connection
 
         public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
+            _sendEventArgs.UserToken.Reset();
             var need = count > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : count;
             if (buffer != null)
             {
-                ((Token)_sendEventArgs.UserToken).Bytes = buffer;
-                ((Token)_sendEventArgs.UserToken).Offset = offset;
-                ((Token)_sendEventArgs.UserToken).Count = count;
-                ((Token)_sendEventArgs.UserToken).Send = 0;
+                _sendEventArgs.UserToken.Bytes = buffer;
+                _sendEventArgs.UserToken.Offset = offset;
+                _sendEventArgs.UserToken.Count = count;
+                _sendEventArgs.UserToken.Send = 0;
                 Buffer.BlockCopy(buffer, offset, _sendEventArgs.Buffer, 0, need);
             }
             _sendEventArgs.SetBuffer(0, need);
@@ -334,7 +313,7 @@ namespace NetGear.Core.Connection
 
         private void BeginFillBuffer(int count, Action<int> continuation = null)
         {
-            ((Token)_readEventArgs.UserToken).Reset();
+            _readEventArgs.UserToken.Reset();
             var large = count > _readEventArgs.Buffer.Length;
             if (large)
             {

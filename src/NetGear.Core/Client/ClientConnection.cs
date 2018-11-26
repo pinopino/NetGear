@@ -240,11 +240,13 @@ namespace NetGear.Core.Client
             _decoder = new FixHeaderDecoder(this, debug);
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.UserToken = new Token();
             _readEventArgs.Completed += IO_Completed;
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
 
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new GSocketAsyncEventArgs();
+            _sendEventArgs.UserToken = new Token();
             _sendEventArgs.Completed += IO_Completed;
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
@@ -323,7 +325,7 @@ namespace NetGear.Core.Client
         public void Send(byte[] messageData, int length, bool rentFromPool = true)
         {
             if (rentFromPool)
-                _sendEventArgs.UserToken = messageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
+                _sendEventArgs.UserToken.Bytes = messageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             Buffer.BlockCopy(BitConverter.GetBytes(length), 0, _sendEventArgs.Buffer, 0, 4);
             Buffer.BlockCopy(messageData, 0, _sendEventArgs.Buffer, 4, length);
@@ -340,7 +342,7 @@ namespace NetGear.Core.Client
         {
             var length = 0;
             var bytes = GetMessageBytes(message, out length);
-            _sendEventArgs.UserToken = bytes; // 预先保存下来，使用完毕需要回收到ArrayPool中
+            _sendEventArgs.UserToken.Bytes = bytes; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             Buffer.BlockCopy(bytes, 0, _sendEventArgs.Buffer, 0, length);
             _sendEventArgs.SetBuffer(0, length);

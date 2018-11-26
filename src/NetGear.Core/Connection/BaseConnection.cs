@@ -52,8 +52,8 @@ namespace NetGear.Core.Connection
         protected IScheduler _scheduler;
         // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
         // 感觉上已经有点可以做IO合并的基础了？
-        protected SocketAsyncEventArgs _readEventArgs;
-        protected SocketAsyncEventArgs _sendEventArgs;
+        protected GSocketAsyncEventArgs _readEventArgs;
+        protected GSocketAsyncEventArgs _sendEventArgs;
 
         static BaseConnection()
         {
