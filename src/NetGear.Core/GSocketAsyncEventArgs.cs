@@ -6,21 +6,24 @@ namespace NetGear.Core
 {
     public class Token
     {
+        public int Op;
         public int Count;
-
         public int Read;
         public int Send;
         public int Offset;
-
         public byte[] Bytes;
         public bool RentFromPool;
-
         public Action<int> Continuation;
 
         public void Reset()
         {
+            Op = 0;
             Count = 0;
             Read = 0;
+            Send = 0;
+            Offset = 0;
+            Bytes = null;
+            RentFromPool = false;
             Continuation = null;
         }
     }

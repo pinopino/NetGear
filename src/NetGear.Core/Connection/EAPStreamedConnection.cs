@@ -128,13 +128,13 @@ namespace NetGear.Core.Connection
                 remain -= e.BytesTransferred;
                 if (remain > 0)
                 {
-                    Console.WriteLine(remain);
                     var need = remain > e.Buffer.Length ? e.Buffer.Length : remain;
                     e.SetBuffer(0, need);
                     if (buffer != null)
                     {
                         Buffer.BlockCopy(buffer, offset + send, e.Buffer, 0, need);
                     }
+                    e.UserToken.Send = send;
                     var willRaiseEvent = _socket.SendAsync(e);
                     if (!willRaiseEvent)
                     {
@@ -159,42 +159,57 @@ namespace NetGear.Core.Connection
 
         private void InvokeReadCallBack(int count, GSocketAsyncEventArgs e)
         {
-            if (count == sizeof(int))
+            switch(e.UserToken.Op)
             {
-                var val = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
-                OnReadInt32Complete?.Invoke(null, val);
-            }
-            else
-            {
-                if (count > e.Buffer.Length)
-                {
-                    OnReadBytesComplete(null, _largebuffer);
-                }
-                else
-                {
-                    OnReadBytesComplete(null, new ArraySegment<byte>(e.Buffer, 0, count));
-                }
+                case 1:
+                    {
+                        var val = (int)(e.Buffer[0] | e.Buffer[1] << 8 | e.Buffer[2] << 16 | e.Buffer[3] << 24);
+                        OnReadInt32Complete?.Invoke(null, val);
+                    }
+                    break;
+                case 2:
+                    {
+
+                    }
+                    break;
+                case 3:
+                    {
+
+                    }
+                    break;
+                case 4:
+                    {
+                        if (count > e.Buffer.Length)
+                        {
+                            OnReadBytesComplete(null, _largebuffer);
+                        }
+                        else
+                        {
+                            OnReadBytesComplete(null, new ArraySegment<byte>(e.Buffer, 0, count));
+                        }
+                    }
+                    break;
             }
         }
 
         public void BeginReadInt32()
         {
-            BeginFillBuffer(4);
+            BeginFillBuffer(4, 1);
         }
 
         public void BeginReadString()
         {
-            BeginFillBuffer(4, length => BeginReadBytes(length));
+            BeginFillBuffer(4, 2, length => BeginReadBytes(length));
         }
 
         public void BeginReadObject()
         {
-            BeginFillBuffer(4, length => BeginReadBytes(length));
+            BeginFillBuffer(4, 3, length => BeginReadBytes(length));
         }
 
         public void BeginReadBytes(int count)
         {
-            BeginFillBuffer(count);
+            BeginFillBuffer(count, 4);
         }
 
         public void BeginWrite(bool value)
@@ -301,25 +316,25 @@ namespace NetGear.Core.Connection
 
         public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)
         {
-            ((Token)_sendEventArgs.UserToken).Reset();
+            _sendEventArgs.UserToken.Reset();
+            _sendEventArgs.UserToken.Offset = offset;
+            _sendEventArgs.UserToken.Count = count;
             var need = count > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : count;
+            _sendEventArgs.SetBuffer(0, need);
             if (buffer != null)
             {
-                ((Token)_sendEventArgs.UserToken).Bytes = buffer;
-                ((Token)_sendEventArgs.UserToken).Offset = offset;
-                ((Token)_sendEventArgs.UserToken).Count = count;
-                ((Token)_sendEventArgs.UserToken).Send = 0;
+                _sendEventArgs.UserToken.Bytes = buffer;
+                _sendEventArgs.UserToken.RentFromPool = rentFromPool;
                 Buffer.BlockCopy(buffer, offset, _sendEventArgs.Buffer, 0, need);
             }
-            _sendEventArgs.SetBuffer(0, need);
             var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
             if (!willRaiseEvent)
             {
-                Send_Completed(null, _sendEventArgs);
+                _scheduler.QueueTask(p => Send_Completed(null, (GSocketAsyncEventArgs)p), _sendEventArgs);
             }
         }
 
-        private void BeginFillBuffer(int count, Action<int> continuation = null)
+        private void BeginFillBuffer(int count, int op, Action<int> continuation = null)
         {
             _readEventArgs.UserToken.Reset();
             var large = count > _readEventArgs.Buffer.Length;
@@ -328,7 +343,7 @@ namespace NetGear.Core.Connection
                 ReleaseLargeBuffer();
                 _largebuffer = ArrayPool<byte>.Shared.Rent(count);
             }
-
+            _readEventArgs.UserToken.Op = op;
             _readEventArgs.UserToken.Count = count;
             _readEventArgs.UserToken.Continuation = continuation;
             var need = large ? _readEventArgs.Buffer.Length : count;
