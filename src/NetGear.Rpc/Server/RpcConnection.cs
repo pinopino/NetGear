@@ -20,8 +20,10 @@ namespace NetGear.Rpc.Server
             _listener = listener;
             _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
             _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
-            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
+            _readEventArgs.Scheduler = _scheduler;
+            _sendEventArgs.Scheduler = _scheduler;
+            _readAwait = new SocketAwaitable(_readEventArgs, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, debug);
         }
 
         public override async void Start()

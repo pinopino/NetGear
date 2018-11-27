@@ -19,14 +19,12 @@ namespace NetGear.Core
     {
         bool _debug;
         bool _disposed;
-        IScheduler _scheduler;
         readonly static Action SENTINEL = () => { };
-
         internal bool m_wasCompleted;
         internal Action m_continuation;
-        internal SocketAsyncEventArgs m_eventArgs;
+        internal GSocketAsyncEventArgs m_eventArgs;
 
-        public SocketAwaitable(SocketAsyncEventArgs eventArgs, IScheduler scheduler = null, bool debug = false)
+        public SocketAwaitable(GSocketAsyncEventArgs eventArgs, bool debug = false)
         {
             if (eventArgs == null)
                 throw new ArgumentNullException("eventArgs");
@@ -35,7 +33,6 @@ namespace NetGear.Core
             _disposed = false;
             m_eventArgs = eventArgs;
             m_eventArgs.Completed += IO_Completed;
-            _scheduler = scheduler;
         }
 
         ~SocketAwaitable()
@@ -69,18 +66,18 @@ namespace NetGear.Core
                 throw new SocketException((int)m_eventArgs.SocketError);
         }
 
-        private void IO_Completed(object sender, SocketAsyncEventArgs e)
+        private void IO_Completed(object sender, GSocketAsyncEventArgs e)
         {
             var prev = m_continuation ?? Interlocked.CompareExchange(ref m_continuation, SENTINEL, null);
             if (prev != null)
             {
-                if (_scheduler == null)
+                if (e.Scheduler == null)
                 {
                     prev();
                 }
                 else
                 {
-                    _scheduler.QueueTask((state) => prev(), null);
+                    e.Scheduler.QueueTask((state) => prev(), null);
                 }
             }
         }
@@ -110,7 +107,6 @@ namespace NetGear.Core
             if (disposing)
             {
                 // 清理托管资源
-                m_eventArgs.UserToken = null;
                 m_eventArgs.Completed -= IO_Completed;
             }
 

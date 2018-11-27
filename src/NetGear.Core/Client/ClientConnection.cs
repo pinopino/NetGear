@@ -44,7 +44,7 @@ namespace NetGear.Core.Client
                 _connection = connection;
             }
 
-            public void ProcessReceive(SocketAsyncEventArgs e)
+            public void ProcessReceive(GSocketAsyncEventArgs e)
             {
                 Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
                 while (true)
@@ -302,13 +302,13 @@ namespace NetGear.Core.Client
             });
         }
 
-        private void ProcessReceive(SocketAsyncEventArgs e)
+        private void ProcessReceive(GSocketAsyncEventArgs e)
         {
             if (_execStatus == STARTED)
                 _decoder.ProcessReceive(e);
         }
 
-        private void DoReceive(SocketAsyncEventArgs e)
+        private void DoReceive(GSocketAsyncEventArgs e)
         {
             var willRaiseEvent = _socket.ReceiveAsync(e);
             if (!willRaiseEvent)
@@ -354,13 +354,13 @@ namespace NetGear.Core.Client
             }
         }
 
-        private void ProcessSend(SocketAsyncEventArgs e)
+        private void ProcessSend(GSocketAsyncEventArgs e)
         {
-            if (e.UserToken != null)
-                ArrayPool<byte>.Shared.Return((byte[])e.UserToken);
+            if (e.UserToken.Bytes != null)
+                ArrayPool<byte>.Shared.Return(e.UserToken.Bytes);
         }
 
-        private void IO_Completed(object sender, SocketAsyncEventArgs e)
+        private void IO_Completed(object sender, GSocketAsyncEventArgs e)
         {
             switch (e.LastOperation)
             {
@@ -399,10 +399,10 @@ namespace NetGear.Core.Client
             if (disposing)
             {
                 // 清理托管资源
-                _readEventArgs.UserToken = null;
-                _sendEventArgs.UserToken = null;
 				_readEventArgs.Completed -= IO_Completed;
                 _sendEventArgs.Completed -= IO_Completed;
+                _readEventArgs.UserToken = null;
+                _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();
                 _sendEventArgs.Dispose();
             }

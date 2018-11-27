@@ -28,13 +28,13 @@ namespace NetGear.Core.Client
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs = new GSocketAsyncEventArgs(_scheduler);
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
+            _readAwait = new SocketAwaitable(_readEventArgs, debug);
 
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new GSocketAsyncEventArgs(_scheduler);
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, debug);
         }
 
         public override void Start()
@@ -91,8 +91,6 @@ namespace NetGear.Core.Client
                 // 清理托管资源
                 _readAwait.Dispose();
                 _sendAwait.Dispose();
-                _readEventArgs.UserToken = null;
-                _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();
                 _sendEventArgs.Dispose();
             }

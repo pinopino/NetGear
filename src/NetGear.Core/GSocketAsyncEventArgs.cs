@@ -29,6 +29,12 @@ namespace NetGear.Core
     {
         IScheduler _scheduler;
 
+        public IScheduler Scheduler
+        {
+            set { _scheduler = value; }
+            get { return _scheduler; }
+        }
+
         public new Token UserToken
         {
             set { base.UserToken = value; }
