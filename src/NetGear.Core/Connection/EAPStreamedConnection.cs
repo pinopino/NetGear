@@ -46,10 +46,10 @@ namespace NetGear.Core.Connection
                 var count = e.UserToken.Count;
                 var read = e.UserToken.Read;
                 var continuation = e.UserToken.Continuation;
-                read += e.BytesTransferred;
-                var remain = count - read;
                 if (count <= e.Buffer.Length)
                 {
+                    read += e.BytesTransferred;
+                    var remain = count - read;
                     if (remain > 0)
                     {
                         e.UserToken.Read = read;
@@ -79,13 +79,16 @@ namespace NetGear.Core.Connection
                 }
                 else
                 {
+                    var remain = count - read;
                     var need = remain > e.Buffer.Length ? e.Buffer.Length : remain;
-                    var tmp = e.BytesTransferred < need ? e.BytesTransferred : need;
-                    Buffer.BlockCopy(e.Buffer, 0, _largebuffer, e.UserToken.Read, e.BytesTransferred);
+                    var current = need > e.BytesTransferred ? e.BytesTransferred : need;
+                    Buffer.BlockCopy(e.Buffer, 0, _largebuffer, read, current);
+                    read += current;
+                    remain -= current;
                     if (remain > 0)
                     {
                         e.UserToken.Read = read;
-                        e.SetBuffer(0, need);
+                        e.SetBuffer(0, need - read);
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
                         {
@@ -298,22 +301,21 @@ namespace NetGear.Core.Connection
 
         public void BeginWrite(byte[] buffer, int offset, int count, bool rentFromPool)
         {
-            _sendEventArgs.UserToken.Reset();
+            ((Token)_sendEventArgs.UserToken).Reset();
             var need = count > _sendEventArgs.Buffer.Length ? _sendEventArgs.Buffer.Length : count;
             if (buffer != null)
             {
-                _sendEventArgs.UserToken.Bytes = buffer;
-                _sendEventArgs.UserToken.Offset = offset;
-                _sendEventArgs.UserToken.Count = count;
-                _sendEventArgs.UserToken.Send = 0;
+                ((Token)_sendEventArgs.UserToken).Bytes = buffer;
+                ((Token)_sendEventArgs.UserToken).Offset = offset;
+                ((Token)_sendEventArgs.UserToken).Count = count;
+                ((Token)_sendEventArgs.UserToken).Send = 0;
                 Buffer.BlockCopy(buffer, offset, _sendEventArgs.Buffer, 0, need);
             }
             _sendEventArgs.SetBuffer(0, need);
             var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
             if (!willRaiseEvent)
             {
-                Console.WriteLine(11);
-                _scheduler.QueueTask(p => Send_Completed(null, (GSocketAsyncEventArgs)p), _sendEventArgs);
+                Send_Completed(null, _sendEventArgs);
             }
         }
 
