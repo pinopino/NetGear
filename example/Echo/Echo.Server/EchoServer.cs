@@ -45,8 +45,9 @@ namespace Echo.Server
 
         private void EchoConnection_OnReadBytesComplete(object sender, ArraySegment<byte> e)
         {
-            Console.WriteLine("收到消息：" + System.Text.Encoding.UTF8.GetString(e.Array));
-            BeginWrite(e.Array, 0, e.Count, false);
+            Console.WriteLine("收到消息：" + System.Text.Encoding.UTF8.GetString(e.Array, 0, e.Count));
+            //BeginWrite(e.Array, 0, e.Count, false);
+            BeginReadBytes(12);
         }
 
         public override void Start()

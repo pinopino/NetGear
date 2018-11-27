@@ -57,7 +57,7 @@ namespace NetGear.Core.Connection
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
                         {
-							// 说明：小心此处可能引起的stack-dive，不过目前更愿意保持这种写法
+							// 说明：小心此处可能引起的stack-dive，不过目前更愿意保持这种写法，
 							// 相当于inline掉了这次调用自然效率会更高些
 							// todo: 可以试着记录堆栈go deeper的次数，超过设置的值时再考虑post
 							// 到IOQueue上去
@@ -125,6 +125,7 @@ namespace NetGear.Core.Connection
                 remain -= e.BytesTransferred;
                 if (remain > 0)
                 {
+                    Console.WriteLine(remain);
                     var need = remain > e.Buffer.Length ? e.Buffer.Length : remain;
                     e.SetBuffer(0, need);
                     if (buffer != null)
@@ -162,7 +163,7 @@ namespace NetGear.Core.Connection
             }
             else
             {
-                if (count > _readEventArgs.Buffer.Length)
+                if (count > e.Buffer.Length)
                 {
                     OnReadBytesComplete(null, _largebuffer);
                 }
@@ -311,7 +312,8 @@ namespace NetGear.Core.Connection
             var willRaiseEvent = _socket.SendAsync(_sendEventArgs);
             if (!willRaiseEvent)
             {
-                Send_Completed(null, _sendEventArgs);
+                Console.WriteLine(11);
+                _scheduler.QueueTask(p => Send_Completed(null, (GSocketAsyncEventArgs)p), _sendEventArgs);
             }
         }
 
@@ -325,12 +327,14 @@ namespace NetGear.Core.Connection
                 _largebuffer = ArrayPool<byte>.Shared.Rent(count);
             }
 
+            _readEventArgs.UserToken.Count = count;
+            _readEventArgs.UserToken.Continuation = continuation;
             var need = large ? _readEventArgs.Buffer.Length : count;
             _readEventArgs.SetBuffer(0, need);
             var willRaiseEvent = _socket.ReceiveAsync(_readEventArgs);
             if (!willRaiseEvent)
             {
-                Read_Completed(null, _readEventArgs);
+                _scheduler.QueueTask(p => Read_Completed(null, (GSocketAsyncEventArgs)p), _readEventArgs);
             }
         }
 

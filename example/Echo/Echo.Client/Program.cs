@@ -14,7 +14,8 @@ namespace Echo.Client
                 while (true)
                 {
                     Console.WriteLine("发送消息");
-                    conn.BeginWrite("hello world");
+                    var bytes = System.Text.Encoding.UTF8.GetBytes("hello world!");
+                    conn.BeginWrite(bytes, 0, bytes.Length, false);
                     Thread.Sleep(1000);
                 }
             }
