@@ -24,6 +24,18 @@ namespace NetGear.Core.Common
             return JsonConvert.DeserializeObject<T>(Encoding.UTF8.GetString(bytes), settings);
         }
 
+        public static object ToDeserializedObject(this byte[] bytes, Type type)
+        {
+            if (null == bytes || bytes.Length == 0) return null;
+            return JsonConvert.DeserializeObject(Encoding.UTF8.GetString(bytes), type, settings);
+        }
+
+        public static object ToDeserializedObject(this Span<byte> bytes, Type type)
+        {
+            if (null == bytes || bytes.Length == 0) return null;
+            return JsonConvert.DeserializeObject(Encoding.UTF8.GetString(bytes), type, settings);
+        }
+
         public static string ToSerializedBase64String<T>(this T obj)
         {
             if (null == obj) return null;

@@ -14,6 +14,8 @@ namespace NetGear.Core
         public byte[] Bytes;
         public bool RentFromPool;
         public Action<int> Continuation;
+        public Type ObjType;
+        public SerializeType SerializeType;
 
         public void Reset()
         {
@@ -25,6 +27,8 @@ namespace NetGear.Core
             Bytes = null;
             RentFromPool = false;
             Continuation = null;
+            ObjType = null;
+            SerializeType = SerializeType.ProtoBuff;
         }
     }
 

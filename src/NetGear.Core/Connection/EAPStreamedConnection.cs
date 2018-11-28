@@ -57,10 +57,10 @@ namespace NetGear.Core.Connection
                         var willRaiseEvent = _socket.ReceiveAsync(e);
                         if (!willRaiseEvent)
                         {
-							// 说明：小心此处可能引起的stack-dive，不过目前更愿意保持这种写法，
-							// 相当于inline掉了这次调用自然效率会更高些
-							// todo: 可以试着记录堆栈go deeper的次数，超过设置的值时再考虑post
-							// 到IOQueue上去
+                            // 说明：小心此处可能引起的stack-dive，不过目前更愿意保持这种写法，
+                            // 相当于inline掉了这次调用自然效率会更高些
+                            // todo: 可以试着记录堆栈go deeper的次数，超过设置的值时再考虑post
+                            // 到IOQueue上去
                             Read_Completed(sender, e);
                         }
                     }
@@ -159,7 +159,7 @@ namespace NetGear.Core.Connection
 
         private void InvokeReadCallBack(int count, GSocketAsyncEventArgs e)
         {
-            switch(e.UserToken.Op)
+            switch (e.UserToken.Op)
             {
                 case 1:
                     {
@@ -169,12 +169,47 @@ namespace NetGear.Core.Connection
                     break;
                 case 2:
                     {
-
+                        byte[] bytes;
+                        if (e.UserToken.Count <= e.Buffer.Length)
+                        {
+                            bytes = e.Buffer;
+                        }
+                        else
+                        {
+                            bytes = _largebuffer;
+                        }
+                        OnReadStringComplete(null, Encoding.UTF8.GetString(bytes, 0, e.UserToken.Count));
                     }
                     break;
                 case 3:
                     {
-
+                        byte[] bytes;
+                        if (e.UserToken.Count <= e.Buffer.Length)
+                        {
+                            bytes = e.Buffer;
+                        }
+                        else
+                        {
+                            bytes = _largebuffer;
+                        }
+                        object obj = null;
+                        switch (e.UserToken.SerializeType)
+                        {
+                            case SerializeType.Json:
+                                {
+                                    obj = bytes.AsSpan(0, e.UserToken.Count).ToDeserializedObject(e.UserToken.ObjType);
+                                }
+                                break;
+                            case SerializeType.ProtoBuff:
+                                {
+                                    using (MemoryStream stream = new MemoryStream(bytes, 0, e.UserToken.Count))
+                                    {
+                                        obj = Serializer.Deserialize(e.UserToken.ObjType, stream);
+                                    }
+                                }
+                                break;
+                        }
+                        OnReadObjectComplete(null, obj);
                     }
                     break;
                 case 4:
@@ -199,12 +234,12 @@ namespace NetGear.Core.Connection
 
         public void BeginReadString()
         {
-            BeginFillBuffer(4, 2, length => BeginReadBytes(length));
+            BeginFillBuffer(4, 2, length => BeginReadBytes(length, 2));
         }
 
-        public void BeginReadObject()
+        public void BeginReadObject<T>(SerializeType serializeType = SerializeType.ProtoBuff)
         {
-            BeginFillBuffer(4, 3, length => BeginReadBytes(length));
+            BeginFillBuffer(4, 3, length => BeginReadBytes(length, 3), typeof(T), serializeType);
         }
 
         public void BeginReadBytes(int count)
@@ -334,7 +369,12 @@ namespace NetGear.Core.Connection
             }
         }
 
-        private void BeginFillBuffer(int count, int op, Action<int> continuation = null)
+        private void BeginReadBytes(int count, int op)
+        {
+            BeginFillBuffer(count, op);
+        }
+
+        private void BeginFillBuffer(int count, int op, Action<int> continuation = null, Type objType = null, SerializeType serializeType = SerializeType.ProtoBuff)
         {
             _readEventArgs.UserToken.Reset();
             var large = count > _readEventArgs.Buffer.Length;
@@ -346,6 +386,8 @@ namespace NetGear.Core.Connection
             _readEventArgs.UserToken.Op = op;
             _readEventArgs.UserToken.Count = count;
             _readEventArgs.UserToken.Continuation = continuation;
+            _readEventArgs.UserToken.SerializeType = serializeType;
+            _readEventArgs.UserToken.ObjType = objType;
             var need = large ? _readEventArgs.Buffer.Length : count;
             _readEventArgs.SetBuffer(0, need);
             var willRaiseEvent = _socket.ReceiveAsync(_readEventArgs);
