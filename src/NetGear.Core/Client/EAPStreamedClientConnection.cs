@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace NetGear.Core.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection
+    public class EAPStreamedClientConnection : EAPStreamedConnection
     {
         int _id;
         bool _debug;
@@ -17,7 +17,7 @@ namespace NetGear.Core.Client
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
-        public StreamedSocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public EAPStreamedClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
@@ -27,19 +27,27 @@ namespace NetGear.Core.Client
             _bufferSize = bufferSize;
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
-
-            _readEventArgs = new SocketAsyncEventArgs();
+            
+            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.UserToken = new Token();
+            _readEventArgs.Completed += Read_Completed;
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
 
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new GSocketAsyncEventArgs();
+            _sendEventArgs.UserToken = new Token();
+            _sendEventArgs.Completed += Send_Completed;
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
+        }
+
+        private void On_ReadBytesComplete(object sender, ArraySegment<byte> e)
+        {
+            Console.WriteLine("收到服务端返回：" + System.Text.Encoding.UTF8.GetString(e.Array));
         }
 
         public override void Start()
         {
             // just do nothing
+            OnReadBytesComplete += On_ReadBytesComplete;
         }
 
         public void Connect()
@@ -89,8 +97,8 @@ namespace NetGear.Core.Client
             if (disposing)
             {
                 // 清理托管资源
-                _readAwait.Dispose();
-                _sendAwait.Dispose();
+                _readEventArgs.Completed -= Read_Completed;
+                _sendEventArgs.Completed -= Send_Completed;
                 _readEventArgs.UserToken = null;
                 _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();
@@ -101,6 +109,8 @@ namespace NetGear.Core.Client
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

@@ -6,23 +6,24 @@ using System.Threading.Tasks;
 
 namespace NetGear.Rpc.Server
 {
-    public sealed class RpcConnection : StreamedSocketConnection
+    public sealed class RpcConnection : StreamedConnection
     {
         bool _disposed;
-        RpcListener _listener;
         RpcServer _server;
+        RpcListener _listener;
 
         public RpcConnection(int id, RpcServer server, Socket socket, RpcListener listener, bool debug)
             : base(id, socket, debug)
         {
-            _listener = listener;
+            _disposed = false;
             _server = server;
-
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-
-            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
+            _listener = listener;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+            _readEventArgs.Scheduler = _scheduler;
+            _sendEventArgs.Scheduler = _scheduler;
+            _readAwait = new SocketAwaitable(_readEventArgs, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, debug);
         }
 
         public override async void Start()
@@ -33,12 +34,12 @@ namespace NetGear.Rpc.Server
                 {
                     await ProcessInvocation();
                 }
-                catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted || ex.SocketErrorCode == SocketError.InvalidArgument)
+                catch (SocketException ex)
                 {
                     Abort("远程连接被关闭");
                     break;
                 }
-                catch
+                catch (Exception ex)
                 {
                     Close();
                     break;
@@ -53,7 +54,7 @@ namespace NetGear.Rpc.Server
 
             // 准备调用方法
             ServiceInfo invokedInstance;
-            if ( _server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
+            if (_server.Services.TryGetValue(obj.ServiceHash, out invokedInstance))
             {
                 int index = obj.MethodIndex;
                 object[] parameters = new object[obj.Parameters.Count];
@@ -102,14 +103,16 @@ namespace NetGear.Rpc.Server
                 _sendAwait.Dispose();
                 _readEventArgs.UserToken = null;
                 _sendEventArgs.UserToken = null;
-                _readEventArgs.Dispose();
-                _sendEventArgs.Dispose();
+                ((PooledSocketAsyncEventArgs)_readEventArgs).Dispose();
+                ((PooledSocketAsyncEventArgs)_sendEventArgs).Dispose();
             }
 
             // 清理非托管资源
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

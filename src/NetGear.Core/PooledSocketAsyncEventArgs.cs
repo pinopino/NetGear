@@ -1,27 +1,27 @@
 ﻿using NetGear.Core.Common;
 using System;
-using System.Net.Sockets;
 
 namespace NetGear.Core
 {
-    public sealed class PooledSocketAsyncEventArgs : SocketAsyncEventArgs, IPooledWapper
+    public sealed class PooledSocketAsyncEventArgs : GSocketAsyncEventArgs, IPooledWapper
     {
         // 对于池化的对象来说，_disposed几乎没有什么作用，因为回到池后它还会再生，dispose可没有这种语义
         private bool _disposed;
-        private ObjectPool<IPooledWapper> _pool;
+        private ObjectPool<PooledSocketAsyncEventArgs> _pool;
         public DateTime LastGetTime { set; get; }
 
-        public PooledSocketAsyncEventArgs(ObjectPool<IPooledWapper> pool)
+        public PooledSocketAsyncEventArgs(ObjectPool<PooledSocketAsyncEventArgs> pool)
         {
             if (pool == null)
                 throw new ArgumentNullException("pool");
+
             _pool = pool;
             _disposed = false;
         }
 
         ~PooledSocketAsyncEventArgs()
         {
-            //必须为false
+            // 必须为false
             Dispose(false);
         }
 

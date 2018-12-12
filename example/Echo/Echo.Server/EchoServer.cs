@@ -14,7 +14,7 @@ namespace Echo.Server
         public EchoListener(int maxConnectionCount, int bufferSize, bool debug = false)
             : base(maxConnectionCount, bufferSize, debug)
         {
-            _debug = debug;
+            _debug = debug;            
         }
 
         protected override BaseConnection CreateConnection(SocketAsyncEventArgs e)
@@ -23,7 +23,7 @@ namespace Echo.Server
         }
     }
 
-    public sealed class EchoConnection : StreamedSocketConnection
+    public sealed class EchoConnection : EAPStreamedConnection
     {
         bool _disposed;
         EchoListener _listener;
@@ -31,34 +31,39 @@ namespace Echo.Server
         public EchoConnection(int id, Socket socket, EchoListener listener, bool debug)
             : base(id, socket, debug)
         {
-            _listener = listener;            
+            _disposed = false;
+            _listener = listener;
 
-            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get() as PooledSocketAsyncEventArgs;
-            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get() as PooledSocketAsyncEventArgs;
+            _readEventArgs = _listener.SocketAsyncReadEventArgsPool.Get();
+            _readEventArgs.UserToken = new Token();
+            _readEventArgs.Completed += Read_Completed;
 
-            _readAwait = new SocketAwaitable(_readEventArgs, _scheduler, debug);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, _scheduler, debug);
+            _sendEventArgs = _listener.SocketAsyncSendEventArgsPool.Get();
+            _sendEventArgs.UserToken = new Token();
+            _sendEventArgs.Completed += Send_Completed;
         }
 
-        public override async void Start()
+        private void EchoConnection_OnReadBytesComplete(object sender, ArraySegment<byte> e)
         {
-            while (true)
+            Console.WriteLine("收到消息：" + System.Text.Encoding.UTF8.GetString(e.Array, 0, e.Count));
+            BeginWrite(e.Array, 0, e.Count, false);
+            BeginReadBytes(12);
+        }
+
+        public override void Start()
+        {
+            OnReadBytesComplete += EchoConnection_OnReadBytesComplete;
+            try
             {
-                try
-                {
-                    var bytes = await ReadBytes(12);
-                    await Write(bytes.Array, 0, bytes.Count, false);
-                }
-                catch (SocketException ex)
-                {
-                    Abort("远程连接被关闭");
-                    break;
-                }
-                catch
-                {
-                    Close();
-                    break;
-                }
+                BeginReadBytes(12);
+            }
+            catch (SocketException ex)
+            {
+                Abort("远程连接被关闭");
+            }
+            catch (Exception ex)
+            {
+                Close();
             }
         }
 
@@ -71,18 +76,20 @@ namespace Echo.Server
             if (disposing)
             {
                 // 清理托管资源
-                _readAwait.Dispose();
-                _sendAwait.Dispose();
+                _readEventArgs.Completed -= Read_Completed;
+                _sendEventArgs.Completed -= Send_Completed;
                 _readEventArgs.UserToken = null;
                 _sendEventArgs.UserToken = null;
-                _readEventArgs.Dispose();
-                _sendEventArgs.Dispose();
+                ((PooledSocketAsyncEventArgs)_readEventArgs).Dispose();
+                ((PooledSocketAsyncEventArgs)_sendEventArgs).Dispose();
             }
 
             // 清理非托管资源
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

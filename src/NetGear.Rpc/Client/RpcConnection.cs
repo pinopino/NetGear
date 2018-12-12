@@ -1,17 +1,18 @@
-﻿using NetGear.Core.Common;
+﻿using NetGear.Core.Client;
+using NetGear.Core.Common;
 using System;
 
 namespace NetGear.Rpc.Client
 {
-    public sealed class StreamedRpcConnection : StreamedSocketClientConnection, IPooledWapper
+    public sealed class RpcConnection : StreamedClientConnection, IPooledWapper
     {
         int _id;
         // 对于池化的对象来说，_disposed几乎没有什么作用，因为回到池后它还会再生，dispose可没有这种语义
-        bool _disposed;        
-        ObjectPool<IPooledWapper> _pool;
+        bool _disposed;
+        ObjectPool<RpcConnection> _pool;
         public DateTime LastGetTime { set; get; }
 
-        public StreamedRpcConnection(ObjectPool<IPooledWapper> pool, int id, string address, int port, int bufferSize, bool debug = false)
+        public RpcConnection(ObjectPool<RpcConnection> pool, int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, address, port, bufferSize, debug)
         {
             if (pool == null)
@@ -22,7 +23,7 @@ namespace NetGear.Rpc.Client
             _disposed = false;
         }
 
-        ~StreamedRpcConnection()
+        ~RpcConnection()
         {
             Dispose(false);
         }

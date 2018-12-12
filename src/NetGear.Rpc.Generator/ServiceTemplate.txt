@@ -12,9 +12,9 @@ namespace {2}
 		ulong _serviceHash;
 		{5} _client;
 
-		public {6}(IPEndPoint endPoint)
+		public {6}(string address, int port)
 		{{
-			_client = new {7}(typeof({8}), endPoint);
+			_client = new {7}(typeof({8}), address, port);
 			_serviceHash = CalculateHash(typeof({9}).FullName);
 		}}
 

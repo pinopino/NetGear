@@ -1,5 +1,5 @@
 /*
- *  2018-11-12 22:43:19
+ *  2018-11-22 15:09:25
  *  本文件由生成工具自动生成，请勿随意修改内容除非你很清楚自己在做什么！
  */
 
@@ -8,18 +8,17 @@ using System.Net;
 using System.Collections;
 using System.Collections.Generic;
 using NetGear.Rpc.Client;
-using NetGear.Rpc;
 
 namespace NetGear.Example.Rpc
 {
 	public class TestContractProxy : BaseProxy, ITestContract
 	{
 		ulong _serviceHash;
-		StreamedRpcClient _client;
+		RpcClient _client;
 
-		public TestContractProxy(IPEndPoint endPoint)
+		public TestContractProxy(string address, int port)
 		{
-			_client = new StreamedRpcClient(typeof(ITestContract), endPoint);
+			_client = new RpcClient(typeof(ITestContract), address, port);
 			_serviceHash = CalculateHash(typeof(ITestContract).FullName);
 		}
 

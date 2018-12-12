@@ -8,15 +8,14 @@ namespace Echo.Client
     {
         static void Main(string[] args)
         {
-            using (var conn = new StreamedSocketClientConnection(1, "127.0.0.1", 5001, 256))
+            using (var conn = new EAPStreamedClientConnection(1, "127.0.0.1", 5001, 256))
             {
                 conn.Connect();
                 while (true)
                 {
                     Console.WriteLine("发送消息");
-                    conn.Write("hello world").Wait();
-                    var res = conn.ReadString().Result;
-                    Console.WriteLine("收到服务端响应：" + res);
+                    var bytes = System.Text.Encoding.UTF8.GetBytes("hello world!");
+                    conn.BeginWrite(bytes, 0, bytes.Length, false);
                     Thread.Sleep(1000);
                 }
             }

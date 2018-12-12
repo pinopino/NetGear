@@ -1,5 +1,6 @@
 ﻿using NetGear.Core.Threading;
 using System;
+using System.Buffers;
 using System.Net.Sockets;
 using System.Threading;
 
@@ -21,13 +22,18 @@ namespace NetGear.Core.Connection
     {
         public string AbortReason { set; get; }
         public ConnectionInfo Connection { set; get; }
+
+        public override string ToString()
+        {
+            return string.Format("Id：{0}，Abort原因：[{1}]，时间：{2}", Connection.Num, AbortReason, Connection.Time);
+        }
     }
 
     public abstract class BaseConnection : IDisposable
     {
         int _id;
         bool _debug;
-        bool _disposed;
+        bool _disposed;        
 
         protected const int NOT_STARTED = 1;
         protected const int STARTED = 2;
@@ -44,6 +50,10 @@ namespace NetGear.Core.Connection
         private static IScheduler[] _schedulers;
         private static int _concurrency;
         protected IScheduler _scheduler;
+        // todo: 如果不是在conn.ctor的时候初始化saea，而是在每次执行io时从池中获取saea，
+        // 感觉上已经有点可以做IO合并的基础了？
+        protected GSocketAsyncEventArgs _readEventArgs;
+        protected GSocketAsyncEventArgs _sendEventArgs;
 
         static BaseConnection()
         {
@@ -55,19 +65,19 @@ namespace NetGear.Core.Connection
             }
         }
 
-        public BaseConnection(int id, Socket socket, bool debug = false)
+        public BaseConnection(int id, Socket socket, bool debug)
         {
             _id = id;
             _debug = debug;
             _disposed = false;
-            _execStatus = NOT_STARTED;
             _socket = socket;
+            _execStatus = NOT_STARTED;
             _scheduler = _schedulers[_id % _concurrency];
         }
 
         ~BaseConnection()
         {
-            //必须为false
+            // 必须为false
             Dispose(false);
         }
 

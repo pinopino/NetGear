@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core.Client
 {
-    public class SocketClientConnection : BaseConnection
+    public class ClientConnection : BaseConnection
     {
         class FixHeaderDecoder
         {
@@ -35,16 +35,16 @@ namespace NetGear.Core.Client
             int messageBytesDoneCount = 0;
             int messageBytesDoneThisOp = 0;
             int remainingBytesToProcess = 0;
-            SocketClientConnection _connection;
+            ClientConnection _connection;
 
-            public FixHeaderDecoder(SocketClientConnection connection, bool debug = false)
+            public FixHeaderDecoder(ClientConnection connection, bool debug = false)
             {
                 _debug = debug;
                 _parseStatus = ParseEnum.Received;
                 _connection = connection;
             }
 
-            public void ProcessReceive(SocketAsyncEventArgs e)
+            public void ProcessReceive(GSocketAsyncEventArgs e)
             {
                 Print("当前线程id：" + Thread.CurrentThread.ManagedThreadId);
                 while (true)
@@ -227,10 +227,8 @@ namespace NetGear.Core.Client
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
         FixHeaderDecoder _decoder;
-        SocketAsyncEventArgs _readEventArgs;
-        SocketAsyncEventArgs _sendEventArgs;
 
-        public SocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public ClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
@@ -242,11 +240,13 @@ namespace NetGear.Core.Client
             _decoder = new FixHeaderDecoder(this, debug);
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs = new GSocketAsyncEventArgs();
+            _readEventArgs.UserToken = new Token();
             _readEventArgs.Completed += IO_Completed;
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
 
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _sendEventArgs = new GSocketAsyncEventArgs();
+            _sendEventArgs.UserToken = new Token();
             _sendEventArgs.Completed += IO_Completed;
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
         }
@@ -302,13 +302,13 @@ namespace NetGear.Core.Client
             });
         }
 
-        private void ProcessReceive(SocketAsyncEventArgs e)
+        private void ProcessReceive(GSocketAsyncEventArgs e)
         {
             if (_execStatus == STARTED)
                 _decoder.ProcessReceive(e);
         }
 
-        private void DoReceive(SocketAsyncEventArgs e)
+        private void DoReceive(GSocketAsyncEventArgs e)
         {
             var willRaiseEvent = _socket.ReceiveAsync(e);
             if (!willRaiseEvent)
@@ -325,7 +325,7 @@ namespace NetGear.Core.Client
         public void Send(byte[] messageData, int length, bool rentFromPool = true)
         {
             if (rentFromPool)
-                _sendEventArgs.UserToken = messageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
+                _sendEventArgs.UserToken.Bytes = messageData; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             Buffer.BlockCopy(BitConverter.GetBytes(length), 0, _sendEventArgs.Buffer, 0, 4);
             Buffer.BlockCopy(messageData, 0, _sendEventArgs.Buffer, 4, length);
@@ -342,7 +342,7 @@ namespace NetGear.Core.Client
         {
             var length = 0;
             var bytes = GetMessageBytes(message, out length);
-            _sendEventArgs.UserToken = bytes; // 预先保存下来，使用完毕需要回收到ArrayPool中
+            _sendEventArgs.UserToken.Bytes = bytes; // 预先保存下来，使用完毕需要回收到ArrayPool中
 
             Buffer.BlockCopy(bytes, 0, _sendEventArgs.Buffer, 0, length);
             _sendEventArgs.SetBuffer(0, length);
@@ -354,13 +354,13 @@ namespace NetGear.Core.Client
             }
         }
 
-        private void ProcessSend(SocketAsyncEventArgs e)
+        private void ProcessSend(GSocketAsyncEventArgs e)
         {
-            if (e.UserToken != null)
-                ArrayPool<byte>.Shared.Return((byte[])e.UserToken);
+            if (e.UserToken.Bytes != null)
+                ArrayPool<byte>.Shared.Return(e.UserToken.Bytes);
         }
 
-        private void IO_Completed(object sender, SocketAsyncEventArgs e)
+        private void IO_Completed(object sender, GSocketAsyncEventArgs e)
         {
             switch (e.LastOperation)
             {
@@ -399,10 +399,10 @@ namespace NetGear.Core.Client
             if (disposing)
             {
                 // 清理托管资源
-                _readEventArgs.UserToken = null;
-                _readEventArgs.Completed -= IO_Completed;
-                _sendEventArgs.UserToken = null;
+				_readEventArgs.Completed -= IO_Completed;
                 _sendEventArgs.Completed -= IO_Completed;
+                _readEventArgs.UserToken = null;
+                _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();
                 _sendEventArgs.Dispose();
             }
@@ -411,6 +411,8 @@ namespace NetGear.Core.Client
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }

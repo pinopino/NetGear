@@ -31,6 +31,7 @@ namespace NetGear.Core.Listener
         protected Socket _socket;
         protected ManualResetEventSlim _shutdownEvent;
         protected SemaphoreSlim _acceptedClientsSemaphore;
+        protected ConcurrentDictionary<int, BaseConnection> _connectionList;
 
         #region 事件
         public event EventHandler<ConnectionInfo> OnConnectionCreated;
@@ -38,9 +39,8 @@ namespace NetGear.Core.Listener
         public event EventHandler<ConnectionInfo> OnConnectionClosed;
         #endregion
 
-        ConcurrentDictionary<int, BaseConnection> ConnectionList;
-        public ObjectPool<IPooledWapper> SocketAsyncReadEventArgsPool;
-        public ObjectPool<IPooledWapper> SocketAsyncSendEventArgsPool;
+        public ObjectPool<PooledSocketAsyncEventArgs> SocketAsyncReadEventArgsPool;
+        public ObjectPool<PooledSocketAsyncEventArgs> SocketAsyncSendEventArgsPool;
 
         public BaseListener(int maxConnectionCount, int bufferSize, bool debug = false)
         {
@@ -50,19 +50,20 @@ namespace NetGear.Core.Listener
             _maxConnectionCount = maxConnectionCount;
             _shutdownEvent = new ManualResetEventSlim(false);
             _acceptedClientsSemaphore = new SemaphoreSlim(maxConnectionCount, maxConnectionCount);
-            ConnectionList = new ConcurrentDictionary<int, BaseConnection>();
+            _connectionList = new ConcurrentDictionary<int, BaseConnection>();
 
-            SocketAsyncSendEventArgsPool = new ObjectPool<IPooledWapper>(maxConnectionCount, 12, (pool) =>
+            var min_retained = Math.Min(Environment.ProcessorCount, 16);
+            SocketAsyncReadEventArgsPool = new ObjectPool<PooledSocketAsyncEventArgs>(maxConnectionCount, min_retained, (pool) =>
             {
                 var socketAsyncEventArgs = new PooledSocketAsyncEventArgs(pool);
-                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(bufferSize), 0, bufferSize);
+                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
                 return socketAsyncEventArgs;
             });
 
-            SocketAsyncReadEventArgsPool = new ObjectPool<IPooledWapper>(maxConnectionCount, 12, (pool) =>
+            SocketAsyncSendEventArgsPool = new ObjectPool<PooledSocketAsyncEventArgs>(maxConnectionCount, min_retained, (pool) =>
             {
                 var socketAsyncEventArgs = new PooledSocketAsyncEventArgs(pool);
-                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(bufferSize), 0, bufferSize);
+                socketAsyncEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
                 return socketAsyncEventArgs;
             });
         }
@@ -127,11 +128,12 @@ namespace NetGear.Core.Listener
                 connection.OnConnectionClosed += ConnectionClosed;
                 connection.OnConnectionAborted += ConnectionAborted;
                 connection.Start();
-                ConnectionList.TryAdd(_connectedCount, connection);
+                _connectionList.TryAdd(_connectedCount, connection);
                 OnConnectionCreated?.Invoke(this, new ConnectionInfo { Num = connection.Id, Description = string.Empty, Time = DateTime.Now });
             }
             catch (Exception ex)
             {
+                throw ex; // todo: 先throw方便调试，后期取消
                 Print(ex.Message);
             }
 
@@ -155,9 +157,9 @@ namespace NetGear.Core.Listener
             _shutdownEvent.Set();
             // 关闭所有连接
             BaseConnection conn;
-            foreach (var key in ConnectionList.Keys)
+            foreach (var key in _connectionList.Keys)
             {
-                if (ConnectionList.TryRemove(key, out conn))
+                if (_connectionList.TryRemove(key, out conn))
                 {
                     conn.Dispose();
                 }

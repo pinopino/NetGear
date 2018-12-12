@@ -1,29 +1,26 @@
 ﻿using NetGear.Core.Common;
 using System;
 using System.Collections.Generic;
-using System.Net;
 
 namespace NetGear.Rpc.Client
 {
-    public class StreamedRpcClient
+    public class RpcClient
     {
         bool _debug;
-        object _syncRoot;
-        static ObjectPool<IPooledWapper> _connectionPool;
+        static ObjectPool<RpcConnection> _connectionPool;
         static Dictionary<Type, byte> _parameterTypes;
 
-        public StreamedRpcClient(Type serviceType, IPEndPoint endPoint)
+        public RpcClient(Type serviceType, string address, int port)
         {
-            var count = 0;
             _debug = false;
-            _syncRoot = new object();
-
-            _connectionPool = new ObjectPool<IPooledWapper>(12, 4, pool => new StreamedRpcConnection(pool, ++count, endPoint.Address.ToString(), endPoint.Port, 256, _debug));
+            var count = 0;
+            var num = Math.Min(Environment.ProcessorCount, 16);
+            _connectionPool = new ObjectPool<RpcConnection>(num * 4, num, pool => new RpcConnection(pool, ++count, address, port, 256, _debug));
         }
 
         public object InvokeMethod(ulong hash, int index, params object[] parameters)
         {
-            using (var conn = (StreamedRpcConnection)_connectionPool.Get())
+            using (var conn = _connectionPool.Get())
             {
                 conn.Connect();
 

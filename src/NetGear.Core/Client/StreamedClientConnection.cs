@@ -1,14 +1,13 @@
-﻿using NetGear.Core;
-using NetGear.Core.Connection;
+﻿using NetGear.Core.Connection;
 using System;
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 
-namespace NetGear.Rpc.Client
+namespace NetGear.Core.Client
 {
-    public class StreamedSocketClientConnection : StreamedSocketConnection
+    public class StreamedClientConnection : StreamedConnection
     {
         int _id;
         bool _debug;
@@ -18,7 +17,7 @@ namespace NetGear.Rpc.Client
         int _connectTimeout; // 单位毫秒
         IPEndPoint _remoteEndPoint;
 
-        public StreamedSocketClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
+        public StreamedClientConnection(int id, string address, int port, int bufferSize, bool debug = false)
             : base(id, new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp), debug)
         {
             _id = id;
@@ -29,13 +28,13 @@ namespace NetGear.Rpc.Client
             _connectTimeout = 5 * 1000;
             _remoteEndPoint = new IPEndPoint(IPAddress.Parse(address), port);
 
-            _readEventArgs = new SocketAsyncEventArgs();
+            _readEventArgs = new GSocketAsyncEventArgs(_scheduler);
             _readEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _readAwait = new SocketAwaitable(_readEventArgs, null, debug);
-            
-            _sendEventArgs = new SocketAsyncEventArgs();
+            _readAwait = new SocketAwaitable(_readEventArgs, debug);
+
+            _sendEventArgs = new GSocketAsyncEventArgs(_scheduler);
             _sendEventArgs.SetBuffer(ArrayPool<byte>.Shared.Rent(_bufferSize), 0, _bufferSize);
-            _sendAwait = new SocketAwaitable(_sendEventArgs, null, debug);
+            _sendAwait = new SocketAwaitable(_sendEventArgs, debug);
         }
 
         public override void Start()
@@ -92,8 +91,6 @@ namespace NetGear.Rpc.Client
                 // 清理托管资源
                 _readAwait.Dispose();
                 _sendAwait.Dispose();
-                _readEventArgs.UserToken = null;
-                _sendEventArgs.UserToken = null;
                 _readEventArgs.Dispose();
                 _sendEventArgs.Dispose();
             }
@@ -102,6 +99,8 @@ namespace NetGear.Rpc.Client
 
             // 让类型知道自己已经被释放
             _disposed = true;
+
+            // 调用基类dispose
             base.Dispose();
         }
     }
