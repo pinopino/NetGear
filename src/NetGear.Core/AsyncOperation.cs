@@ -240,7 +240,7 @@ namespace NetGear.Core
         /// 说明：ValueTaskAwaiter的OnCompleted会dispatch到该方法上来；可以简单理解成这就是
         /// 编译器生成的状态机中那段经典的awaiter调用oncomplete方法。
         /// 由于上层的awaiter仅仅是一层壳子，最终内层异步方法的同步需求还是得由asyncop自己亲自操刀
-        /// （想想awaitable的saea，同步就是靠其自身的Completed委托来实现）
+        /// （想想awaitable的saea，同步就是靠其自身的Completed委托来实现的）
         /// link：https://github.com/dotnet/corert/blob/master/src/System.Private.CoreLib/shared/System/Runtime/CompilerServices/ValueTaskAwaiter.cs
         /// </remarks>
         public void OnCompleted(Action<object> continuation, object state, short token, ValueTaskSourceOnCompletedFlags flags)
@@ -290,7 +290,7 @@ namespace NetGear.Core
             }
 
             // 说明：
-            // 此时asyncop对最重要的就是把continuation安排妥当了：
+            // 此时asyncop对象最重要的就是把continuation安排妥当了：
             // 如果_continuation为null，表示异步操作还在进行中（pending），那么OnCompleted方法这里实际上干不了
             // 什么事情，我们只是将参数continuation设置到_continuation，被动的让completer来负责执行该continuation；
             // 如果_continuation不为null，考虑到这里是OnCompleted方法所以prevContinuation只可能是s_completedSentinel

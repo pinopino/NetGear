@@ -9,12 +9,14 @@ using System.Threading.Tasks;
 namespace NetGear.Core
 {
     // This type is largely similar to the type of the same name in KestrelHttpServer, with some minor tweaks:
-    // - when scheduing a callback against an already complete task (semi-synchronous case), prefer to use the io pipe scheduler for onward continuations, not the thread pool
+    // - when scheduing a callback against an already complete task (semi-synchronous case), prefer to use the 
+    //   io pipe scheduler for onward continuations, not the thread pool
     // - when invoking final continuations, we detect the Inline pipe scheduler and bypass the indirection
     // - the addition of an Abort concept (which invokes any pending continuations, guaranteeing failure)
 
     /// <summary>
-    /// Awaitable SocketAsyncEventArgs, where awaiting the args yields either the BytesTransferred or throws the relevant socket exception
+    /// Awaitable SocketAsyncEventArgs, where awaiting the args yields either the BytesTransferred or throws 
+    /// the relevant socket exception
     /// </summary>
     public class SocketAwaitableEventArgs : SocketAsyncEventArgs, ICriticalNotifyCompletion
     {
@@ -47,7 +49,9 @@ namespace NetGear.Core
         public SocketAwaitableEventArgs(PipeScheduler ioScheduler = null)
         {
             // treat null and Inline interchangeably
-            if ((object)ioScheduler == (object)PipeScheduler.Inline) ioScheduler = null;
+            if ((object)ioScheduler == (object)PipeScheduler.Inline) 
+                ioScheduler = null;
+
             _ioScheduler = ioScheduler;
         }
 

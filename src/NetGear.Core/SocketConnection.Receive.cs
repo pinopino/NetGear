@@ -33,6 +33,8 @@ namespace NetGear.Core
             DebugLog("starting receive loop");
             try
             {
+                // 说明：recv方向上是recv from socket and push to pipe，所以这里回调应该是
+                // 执行在WriterScheduler上
                 _readerArgs = new SocketAwaitableEventArgs(InlineReads ? null : _receiveOptions.WriterScheduler);
                 while (true)
                 {
@@ -99,6 +101,7 @@ namespace NetGear.Core
                     }
                     else
                     {
+                        // 说明：关于归一线程，参考SocketConnection.Send第45行解释
                         result = await flushTask;
                         DebugLog("pipe flushed (async)");
                     }
