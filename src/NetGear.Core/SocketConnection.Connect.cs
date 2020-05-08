@@ -30,16 +30,16 @@ namespace NetGear.Core
             Func<SocketConnection, Task> onConnected = null,
             Socket socket = null, string name = null)
         {
-            var addressFamily = endpoint.AddressFamily == AddressFamily.Unspecified ? 
+            var addressFamily = endpoint.AddressFamily == AddressFamily.Unspecified ?
                 AddressFamily.InterNetwork : endpoint.AddressFamily;
-            var protocolType = addressFamily == AddressFamily.Unix ? 
+            var protocolType = addressFamily == AddressFamily.Unix ?
                 ProtocolType.Unspecified : ProtocolType.Tcp;
 
             if (socket == null)
                 socket = new Socket(addressFamily, SocketType.Stream, protocolType);
-            if (sendPipeOptions == null) 
+            if (sendPipeOptions == null)
                 sendPipeOptions = PipeOptions.Default;
-            if (receivePipeOptions == null) 
+            if (receivePipeOptions == null)
                 receivePipeOptions = PipeOptions.Default;
 
             SetRecommendedClientOptions(socket);
@@ -49,7 +49,8 @@ namespace NetGear.Core
                 args.RemoteEndPoint = endpoint;
                 Debugger.Log(name, $"connecting to {endpoint}...");
 
-                if (!socket.ConnectAsync(args)) args.Complete();
+                if (!socket.ConnectAsync(args))
+                    args.Complete();
                 await args;
             }
 
@@ -57,7 +58,8 @@ namespace NetGear.Core
 
             var connection = Create(socket, sendPipeOptions, receivePipeOptions, connectionOptions, name);
 
-            if (onConnected != null) await onConnected(connection).ConfigureAwait(false);
+            if (onConnected != null)
+                await onConnected(connection).ConfigureAwait(false);
 
             return connection;
         }

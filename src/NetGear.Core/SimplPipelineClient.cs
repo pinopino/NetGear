@@ -3,6 +3,7 @@ using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO.Pipelines;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace NetGear.Core
@@ -19,6 +20,12 @@ namespace NetGear.Core
             : base(pipe)
         {
             _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();
+        }
+
+        public static async Task<SimplPipelineClient> ConnectAsync(IPEndPoint endPoint)
+        {
+            var socketConnection = await SocketConnection.ConnectAsync(endPoint);
+            return new SimplPipelineClient(socketConnection);
         }
 
         protected override ValueTask OnReceiveAsync(ReadOnlySequence<byte> payload, int messageId)

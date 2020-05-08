@@ -4,14 +4,14 @@ using System.Threading;
 
 namespace NetGear.Core
 {
-    internal sealed class ArrayPoolOwner<T> : IMemoryOwner<T>
+    public sealed class ArrayPoolOwner<T> : IMemoryOwner<T>
     {
         private readonly int _length;
         private T[] _oversized;
 
         public static IMemoryOwner<T> Empty => new ArrayPoolOwner<T>(new T[0], 0);
 
-        internal ArrayPoolOwner(T[] oversized, int length)
+        public ArrayPoolOwner(T[] oversized, int length)
         {
             _length = length;
             _oversized = oversized;

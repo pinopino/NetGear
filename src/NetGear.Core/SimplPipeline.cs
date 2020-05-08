@@ -22,7 +22,7 @@ namespace NetGear.Core
         }
 
         #region 读方法
-        protected async Task StartReceiveLoopAsync(CancellationToken cancellationToken = default)
+        protected async Task StartReceiveLoopAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -37,6 +37,10 @@ namespace NetGear.Core
                     while (TryParseFrame(ref buffer, out var payload, out var messageId))
                     {
                         makingProgress = true;
+                        // 说明：
+                        // OnReceiveAsync里面会有一次lease动作，表明我们不想让处理bytes的业务影响到
+                        // pipe里面的内存管理；但是下面紧接着的_reader.AdvanceTo又表明是业务处理完毕
+                        // 了bytes之后内存才被释放，如此是不是没起到应有的效果？
                         await OnReceiveAsync(payload, messageId);
                     }
                     _reader.AdvanceTo(buffer.Start, buffer.End);
