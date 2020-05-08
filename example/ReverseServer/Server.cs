@@ -12,13 +12,8 @@ namespace ReverseServer
         protected override ValueTask<IMemoryOwner<byte>> OnReceiveForReplyAsync(IMemoryOwner<byte> message)
         {
             var memory = message.Memory;
-            Reverse(memory.Span);
-            return new ValueTask<IMemoryOwner<byte>>(ArrayPoolOwner<byte>.Empty);
-        }
-
-        private void Reverse(Span<byte> span)
-        {
-            // TODO
+            memory.Span.Reverse();
+            return new ValueTask<IMemoryOwner<byte>>(message);
         }
     }
 }

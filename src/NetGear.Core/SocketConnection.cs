@@ -135,10 +135,10 @@ namespace NetGear.Core
         }
 
         private static readonly Action<object> s_DoReceiveAsync = DoReceiveAsync;
-        private static void DoReceiveAsync(object s) => ((SocketConnection)s).DoReceiveAsync().PipelinesFireAndForget();
+        private static void DoReceiveAsync(object s) => ((SocketConnection)s).DoReceiveAsync().FireAndForget();
 
         private static readonly Action<object> s_DoSendAsync = DoSendAsync;
-        private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().PipelinesFireAndForget();
+        private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().FireAndForget();
         
         public long TotalBytesSent => throw new NotImplementedException();
 

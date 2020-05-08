@@ -18,7 +18,7 @@ namespace NetGear.Core.Common
         public static IMemoryOwner<T> Lease<T>(this ReadOnlySequence<T> source)
         {
             if (source.IsEmpty)
-                return ArrayPoolOwner<T>.Empty;
+                return null;
 
             int len = checked((int)source.Length);
             var arr = ArrayPool<T>.Shared.Rent(len);

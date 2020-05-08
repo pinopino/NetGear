@@ -5,7 +5,7 @@ using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ReverseServer
+namespace ReverseClient
 {
     class Program
     {
@@ -13,10 +13,15 @@ namespace ReverseServer
         {
             var endPoint = new IPEndPoint(IPAddress.Loopback, 5000);
 
-            // 开启server
-            using (var server = new Server())
+            // 开启client
+            using (var client = await SimplPipelineClient.ConnectAsync(endPoint))
             {
-                server.Start(endPoint);
+                // subscribe to broadcasts
+                client.Broadcast += async msg =>
+                {
+                    if (!msg.Memory.IsEmpty)
+                        await WriteLineAsync("*", msg);
+                };
 
                 string line;
                 while ((line = await Console.In.ReadLineAsync()) != null)
@@ -24,14 +29,11 @@ namespace ReverseServer
                     if (line == "q")
                         break;
 
-                    int clientCount, len;
                     using (var leased = Encode(line))
                     {
-                        len = leased.Memory.Length;
-                        clientCount = await server.BroadcastAsync(leased.Memory);
+                        var response = await client.SendReceiveAsync(leased.Memory);
+                        await WriteLineAsync("<", response);
                     }
-                    await Console.Out.WriteLineAsync(
-                        $"Broadcast {len} bytes to {clientCount} clients");
                 }
             }
         }
@@ -43,6 +45,11 @@ namespace ReverseServer
             Array.Copy(origin, bytes, origin.Length);
 
             return new ArrayPoolOwner<byte>(bytes, bytes.Length);
+        }
+
+        static async Task WriteLineAsync(string prefix, IMemoryOwner<byte> message)
+        {
+            await Console.Out.WriteLineAsync($"{prefix} {Encoding.UTF8.GetString(message.Memory.Span)}");
         }
     }
 }

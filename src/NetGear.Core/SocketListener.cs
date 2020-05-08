@@ -88,7 +88,7 @@ namespace NetGear.Core
             _listener.Listen(_backlog);
 
             Scheduler(_receivePipeOptions?.ReaderScheduler,
-                _ => ListenForConnectionsAsync().PipelinesFireAndForget(), null);
+                _ => ListenForConnectionsAsync().FireAndForget(), null);
 
             OnStarted(endPoint);
         }
@@ -111,7 +111,7 @@ namespace NetGear.Core
                     SocketConnection.SetRecommendedServerOptions(clientSocket);
                     var pipe = SocketConnection.Create(clientSocket, _sendPipeOptions, _receivePipeOptions);
 
-                    Scheduler(_receivePipeOptions.ReaderScheduler, RunClientAsync,
+                    Scheduler(_receivePipeOptions?.ReaderScheduler, RunClientAsync,
                         new ClientConnection(pipe, clientSocket.RemoteEndPoint)); // boxed, but only once per client
                 }
             }

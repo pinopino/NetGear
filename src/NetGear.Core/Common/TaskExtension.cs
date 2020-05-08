@@ -5,7 +5,7 @@ namespace NetGear.Core.Common
 {
     internal static class TaskExtension
     {
-        internal static void PipelinesFireAndForget(this Task task)
+        internal static void FireAndForget(this Task task)
            => task?.ContinueWith(t => GC.KeepAlive(t.Exception), TaskContinuationOptions.OnlyOnFaulted);
     }
 }

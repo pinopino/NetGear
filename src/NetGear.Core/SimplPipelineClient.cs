@@ -13,19 +13,56 @@ namespace NetGear.Core
         private int _nextMessageId;
         private Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>> _awaitingResponses;
 
-        public delegate void BroadcastHandler(IMemoryOwner<byte> memory);
-        public event BroadcastHandler OnBroadcast;
+        public event Action<IMemoryOwner<byte>> Broadcast;
 
         public SimplPipelineClient(IDuplexPipe pipe)
             : base(pipe)
         {
             _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();
+            StartReceiveLoopAsync().FireAndForget();
         }
 
         public static async Task<SimplPipelineClient> ConnectAsync(IPEndPoint endPoint)
         {
-            var socketConnection = await SocketConnection.ConnectAsync(endPoint);
+            var socketConnection = await SocketConnection.ConnectAsync(endPoint,
+                onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
             return new SimplPipelineClient(socketConnection);
+        }
+
+        public ValueTask SendAsync(ReadOnlyMemory<byte> message) => WriteAsync(message, 0);
+
+        public async Task<IMemoryOwner<byte>> SendReceiveAsync(IMemoryOwner<byte> message)
+        {
+            using (message)
+            {
+                return await SendReceiveAsync(message.Memory);
+            }
+        }
+
+        public Task<IMemoryOwner<byte>> SendReceiveAsync(ReadOnlyMemory<byte> message)
+        {
+            var tcs = new TaskCompletionSource<IMemoryOwner<byte>>();
+            int messageId;
+            lock (_awaitingResponses)
+            {
+                do
+                {
+                    messageId = ++_nextMessageId;
+                } while (messageId == 0 || _awaitingResponses.ContainsKey(messageId));
+                _awaitingResponses.Add(messageId, tcs);
+            }
+
+            var writeResult = WriteAsync(message, messageId);
+            if (writeResult.IsCompletedSuccessfully)
+                return tcs.Task;
+
+            return AwaitWrite(writeResult, tcs.Task);
+        }
+
+        private async Task<IMemoryOwner<byte>> AwaitWrite(ValueTask writing, Task<IMemoryOwner<byte>> responseForWrite)
+        {
+            await writing;
+            return await responseForWrite;
         }
 
         protected override ValueTask OnReceiveAsync(ReadOnlySequence<byte> payload, int messageId)
@@ -40,49 +77,41 @@ namespace NetGear.Core
                     {
                         _awaitingResponses.Remove(messageId);
                     }
+                    else
+                    {
+                        tcs = null;
+                        messageId = 0; // treat as Broadcast
+                    }
                 }
-                tcs?.TrySetResult(payload.Lease());
+                if (tcs != null)
+                {
+                    // TrySetResult可能会返回false此时lease是没有设置上去的
+                    // 我们需要自己手动释放掉已经借出的lease
+                    IMemoryOwner<byte> lease = null;
+                    try
+                    {   // only if we successfully hand it over
+                        // to the TCS is it considered "not our
+                        // problem anymore" - otherwise: we need
+                        // to dispose
+                        lease = payload.Lease();
+                        if (tcs.TrySetResult(lease))
+                            lease = null;
+                    }
+                    finally
+                    {
+                        if (lease != null)
+                            try { lease.Dispose(); } catch { }
+                    }
+                }
             }
-            else
+
+            if (messageId == 0)
             {
                 // unsolicited
-                OnBroadcast?.Invoke(payload.Lease());
+                Broadcast?.Invoke(payload.Lease());
             }
 
             return default;
-        }
-
-        public ValueTask<IMemoryOwner<byte>> SendReceiveAsync(IMemoryOwner<byte> message)
-        {
-            using (message)
-            {
-                return SendReceiveAsync(message.Memory);
-            }
-        }
-
-        public ValueTask<IMemoryOwner<byte>> SendReceiveAsync(ReadOnlyMemory<byte> message)
-        {
-            var tcs = new TaskCompletionSource<IMemoryOwner<byte>>();
-            int messageId;
-            lock (_awaitingResponses)
-            {
-                messageId = ++_nextMessageId;
-                if (messageId == 0)
-                    messageId = 1;
-                _awaitingResponses.Add(messageId, tcs);
-            }
-
-            var writeResult = WriteAsync(message, messageId);
-            if (writeResult.IsCompletedSuccessfully)
-                return new ValueTask<IMemoryOwner<byte>>(tcs.Task);
-
-            return new ValueTask<IMemoryOwner<byte>>(AwaitWrite(writeResult, tcs));
-        }
-
-        private async Task<IMemoryOwner<byte>> AwaitWrite(ValueTask writing, TaskCompletionSource<IMemoryOwner<byte>> tcs)
-        {
-            await writing;
-            return await tcs.Task;
         }
     }
 }
