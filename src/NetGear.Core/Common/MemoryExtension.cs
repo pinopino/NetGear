@@ -14,16 +14,5 @@ namespace NetGear.Core.Common
                 throw new InvalidOperationException("MemoryMarshal.TryGetArray<byte> could not provide an array");
             return segment;
         }
-
-        public static IMemoryOwner<T> Lease<T>(this ReadOnlySequence<T> source)
-        {
-            if (source.IsEmpty)
-                return null;
-
-            int len = checked((int)source.Length);
-            var arr = ArrayPool<T>.Shared.Rent(len);
-            source.CopyTo(arr);
-            return new ArrayPoolOwner<T>(arr, len);
-        }
     }
 }

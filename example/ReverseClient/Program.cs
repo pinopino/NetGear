@@ -29,22 +29,13 @@ namespace ReverseClient
                     if (line == "q")
                         break;
 
-                    using (var leased = Encode(line))
+                    using (var leased = line.EncodeWithOwnership())
                     {
                         var response = await client.SendReceiveAsync(leased.Memory);
                         await WriteLineAsync("<", response);
                     }
                 }
             }
-        }
-
-        static IMemoryOwner<byte> Encode(string line)
-        {
-            var origin = Encoding.UTF8.GetBytes(line);
-            var bytes = ArrayPool<byte>.Shared.Rent(origin.Length);
-            Array.Copy(origin, bytes, origin.Length);
-
-            return new ArrayPoolOwner<byte>(bytes, bytes.Length);
         }
 
         static async Task WriteLineAsync(string prefix, IMemoryOwner<byte> message)

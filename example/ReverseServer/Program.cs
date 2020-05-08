@@ -1,8 +1,6 @@
 ﻿using NetGear.Core;
 using System;
-using System.Buffers;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace ReverseServer
@@ -25,7 +23,7 @@ namespace ReverseServer
                         break;
 
                     int clientCount, len;
-                    using (var leased = Encode(line))
+                    using (var leased = line.EncodeWithOwnership())
                     {
                         len = leased.Memory.Length;
                         clientCount = await server.BroadcastAsync(leased.Memory);
@@ -34,15 +32,6 @@ namespace ReverseServer
                         $"Broadcast {len} bytes to {clientCount} clients");
                 }
             }
-        }
-
-        static IMemoryOwner<byte> Encode(string line)
-        {
-            var origin = Encoding.UTF8.GetBytes(line);
-            var bytes = ArrayPool<byte>.Shared.Rent(origin.Length);
-            Array.Copy(origin, bytes, origin.Length);
-
-            return new ArrayPoolOwner<byte>(bytes, bytes.Length);
         }
     }
 }

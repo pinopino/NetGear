@@ -30,6 +30,11 @@ namespace NetGear.Core
                 Console.WriteLine($"服务端开始监听@{endPoint}");
             }
 
+            protected override void OnClientDisconnected(in ClientConnection client)
+            {
+                Console.WriteLine($"连接<{client.RemoteEndPoint}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
+            }
+
             protected override void OnClientFaulted(in ClientConnection client, Exception exception)
             {
                 Console.WriteLine($"连接<{client.RemoteEndPoint}>异常，消息：{exception.Message}");

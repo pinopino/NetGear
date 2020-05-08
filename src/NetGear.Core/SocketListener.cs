@@ -62,6 +62,7 @@ namespace NetGear.Core
                     await OnClientConnectedAsync(client).ConfigureAwait(false);
                     try { client.Transport.Input.Complete(); } catch { }
                     try { client.Transport.Output.Complete(); } catch { }
+                    OnClientDisconnected(in client);
                 }
                 catch (Exception ex)
                 {
@@ -129,6 +130,12 @@ namespace NetGear.Core
         /// Invoked when the server has faulted
         /// </summary>
         protected virtual void OnServerFaulted(Exception exception)
+        { }
+
+        /// <summary>
+        /// Invoked when a client has disconnected
+        /// </summary>
+        protected virtual void OnClientDisconnected(in ClientConnection client)
         { }
 
         /// <summary>
