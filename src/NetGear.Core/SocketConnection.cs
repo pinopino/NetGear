@@ -130,6 +130,12 @@ namespace NetGear.Core
             _input = new WrappedReader(_receiveFromSocket.Reader, this);
             _output = new WrappedWriter(_sendToSocket.Writer, this);
 
+            // 说明：
+            // saea例子中是类似开启了一个逻辑上的while(true)，底层读写以及紧挨着的上层协议解析
+            // 部分都是被割裂在回调中的；相比之下这里因为有了一根pipe，整个逻辑表达是非常流畅的。
+            // 我们可以直接扔出两个while(true)，同步直接靠pipe的一端完成，而pipe的另一端又是由更
+            // 上层的业务（包括frame的解析等）来驱使驱动；可以说pipe的这一层indirection增加得是
+            // 非常合适的，一切都可以以一种很自然的方式来思考！
             sendPipeOptions.ReaderScheduler.Schedule(s_DoSendAsync, this);
             receivePipeOptions.ReaderScheduler.Schedule(s_DoReceiveAsync, this);
         }

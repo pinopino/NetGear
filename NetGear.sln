@@ -7,9 +7,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "example", "example", "{5946
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetGear.Core", "src\NetGear.Core\NetGear.Core.csproj", "{0DC67E14-D9EB-4E67-8EAF-F692AE28F1BA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReverseServer", "example\ReverseServer\ReverseServer.csproj", "{30C40599-68BA-4930-BDEA-FB84BDEA80D8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ReverseServer", "example\ReverseServer\ReverseServer.csproj", "{30C40599-68BA-4930-BDEA-FB84BDEA80D8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReverseClient", "example\ReverseClient\ReverseClient.csproj", "{136982A0-866C-4C85-80BE-03A2B4E9B818}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ReverseClient", "example\ReverseClient\ReverseClient.csproj", "{136982A0-866C-4C85-80BE-03A2B4E9B818}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetGear.Libuv", "src\NetGear.Libuv\NetGear.Libuv.csproj", "{AB9C1450-AC79-46A3-AFD3-D941EB53A028}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +31,10 @@ Global
 		{136982A0-866C-4C85-80BE-03A2B4E9B818}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{136982A0-866C-4C85-80BE-03A2B4E9B818}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{136982A0-866C-4C85-80BE-03A2B4E9B818}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB9C1450-AC79-46A3-AFD3-D941EB53A028}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB9C1450-AC79-46A3-AFD3-D941EB53A028}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB9C1450-AC79-46A3-AFD3-D941EB53A028}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB9C1450-AC79-46A3-AFD3-D941EB53A028}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
