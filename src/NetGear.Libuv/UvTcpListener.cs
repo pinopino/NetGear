@@ -6,15 +6,15 @@ namespace NetGear.Libuv
 {
     public class UvTcpListener : IDisposable
     {
-        private static Action<UvStreamHandle, int, Exception, object> _onConnectionCallback = OnConnectionCallback;
-        private static Action<object> _startListeningCallback = state => ((UvTcpListener)state).Listen();
-        private static Action<object> _stopListeningCallback = state => ((UvTcpListener)state).Shutdown();
+        public event Action<UvTcpConnection> OnConnection;
+        private Action<UvStreamHandle, int, Exception, object> _onConnectionCallback;
+        private Action<object> _startListeningCallback = state => ((UvTcpListener)state).Listen();
+        private Action<object> _stopListeningCallback = state => ((UvTcpListener)state).Shutdown();
 
         private readonly IPEndPoint _endpoint;
         private readonly UvThread _thread;
-
         private UvTcpHandle _listenSocket;
-        private Func<UvTcpConnection, Task> _callback;
+
 
         private TaskCompletionSource<object> _startedTcs = new TaskCompletionSource<object>();
 
@@ -22,11 +22,7 @@ namespace NetGear.Libuv
         {
             _thread = thread;
             _endpoint = endpoint;
-        }
-
-        public void OnConnection(Func<UvTcpConnection, Task> callback)
-        {
-            _callback = callback;
+            _onConnectionCallback = OnConnectionCallback;
         }
 
         public Task StartAsync()
@@ -61,7 +57,7 @@ namespace NetGear.Libuv
             Task.Run(() => _startedTcs.TrySetResult(null));
         }
 
-        private static void OnConnectionCallback(UvStreamHandle listenSocket, int status, Exception error, object state)
+        private void OnConnectionCallback(UvStreamHandle listenSocket, int status, Exception error, object state)
         {
             var listener = (UvTcpListener)state;
 
@@ -73,28 +69,11 @@ namespace NetGear.Libuv
                 acceptSocket.NoDelay(true);
                 listenSocket.Accept(acceptSocket);
                 var connection = new UvTcpConnection(listener._thread, acceptSocket);
-                ExecuteCallback(listener, connection);
+                OnConnection?.Invoke(connection);
             }
             catch (UvException)
             {
                 acceptSocket.Dispose();
-            }
-        }
-
-        private static async void ExecuteCallback(UvTcpListener listener, UvTcpConnection connection)
-        {
-            try
-            {
-                await listener._callback?.Invoke(connection);
-            }
-            catch
-            {
-                // Swallow exceptions
-            }
-            finally
-            {
-                // Dispose the connection on task completion
-                connection.Dispose();
             }
         }
     }

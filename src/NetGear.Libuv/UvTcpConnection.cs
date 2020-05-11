@@ -2,6 +2,7 @@
 using System.Buffers;
 using System.IO;
 using System.IO.Pipelines;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -112,11 +113,13 @@ namespace NetGear.Libuv
         private int _pendingWrites;
         private TaskCompletionSource<object> _drainWrites;
         private Task _sendingTask;
+        private IPEndPoint _endPoint;
 
         public UvTcpConnection(UvThread thread, UvTcpHandle handle)
         {
             _thread = thread;
             _handle = handle;
+            _endPoint = _handle.GetSockIPEndPoint();
 
             _input = new WrappedReader(_receiveFromUV.Reader, this);
             _output = new WrappedWriter(_sendToUV.Writer, this);
@@ -124,6 +127,8 @@ namespace NetGear.Libuv
             StartReading();
             _sendingTask = ProcessWrites();
         }
+
+        public IPEndPoint EndPoint => _endPoint;
 
         public void Dispose()
         {
