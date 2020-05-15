@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Microsoft.Extensions.Logging;
 using System;
 using System.Runtime.InteropServices;
 
@@ -13,7 +14,7 @@ namespace NetGear.Libuv
         private readonly static Uv.uv_alloc_cb _uv_alloc_cb = (IntPtr handle, int suggested_size, out Uv.uv_buf_t buf) => UvAllocCb(handle, suggested_size, out buf);
         private readonly static Uv.uv_read_cb _uv_read_cb = (IntPtr handle, int status, ref Uv.uv_buf_t buf) => UvReadCb(handle, status, ref buf);
 
-        private Action<UvStreamHandle, int, Exception, object> _listenCallback;
+        private Action<UvStreamHandle, int, UvException, object> _listenCallback;
         private object _listenState;
         private GCHandle _listenVitality;
 
@@ -22,8 +23,8 @@ namespace NetGear.Libuv
         private object _readState;
         private GCHandle _readVitality;
 
-        protected UvStreamHandle()
-            : base()
+        protected UvStreamHandle(ILibuvTrace logger)
+            : base(logger)
         { }
 
         protected override bool ReleaseHandle()
@@ -39,7 +40,7 @@ namespace NetGear.Libuv
             return base.ReleaseHandle();
         }
 
-        public void Listen(int backlog, Action<UvStreamHandle, int, Exception, object> callback, object state)
+        public void Listen(int backlog, Action<UvStreamHandle, int, UvException, object> callback, object state)
         {
             if (_listenVitality.IsAllocated)
             {
@@ -122,9 +123,17 @@ namespace NetGear.Libuv
         {
             var stream = FromIntPtr<UvStreamHandle>(handle);
 
-            Exception error;
-            stream.Libuv.Check(status, out error);
-            stream._listenCallback(stream, status, error, stream._listenState);
+            stream.Libuv.Check(status, out var error);
+
+            try
+            {
+                stream._listenCallback(stream, status, error, stream._listenState);
+            }
+            catch (Exception ex)
+            {
+                stream._log.LogError(0, ex, "UvConnectionCb");
+                throw;
+            }
         }
 
         private static void UvAllocCb(IntPtr handle, int suggested_size, out Uv.uv_buf_t buf)
@@ -134,8 +143,9 @@ namespace NetGear.Libuv
             {
                 buf = stream._allocCallback(stream, suggested_size, stream._readState);
             }
-            catch
+            catch (Exception ex)
             {
+                stream._log.LogError(0, ex, "UvAllocCb");
                 buf = stream.Libuv.buf_init(IntPtr.Zero, 0);
                 throw;
             }
@@ -144,7 +154,17 @@ namespace NetGear.Libuv
         private static void UvReadCb(IntPtr handle, int status, ref Uv.uv_buf_t buf)
         {
             var stream = FromIntPtr<UvStreamHandle>(handle);
-            stream._readCallback(stream, status, stream._readState);
+
+            try
+            {
+                stream._readCallback(stream, status, stream._readState);
+            }
+            catch (Exception ex)
+            {
+                stream._log.LogError(0, ex, "UbReadCb");
+                throw;
+            }
         }
+
     }
 }

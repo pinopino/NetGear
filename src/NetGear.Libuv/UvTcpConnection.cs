@@ -128,20 +128,71 @@ namespace NetGear.Libuv
             _sendingTask = ProcessWrites();
         }
 
-        public IPEndPoint EndPoint => _endPoint;
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        { }
+        public IPEndPoint EndPoint => this._endPoint;
 
         public PipeReader Input => this._input;
 
         public PipeWriter Output => this._output;
+
+        private void StartReading()
+        {
+            _handle.ReadStart(_allocCallback, _readCallback, this);
+        }
+
+        private static void ReadCallback(UvStreamHandle handle, int status, object state)
+        {
+            ((UvTcpConnection)state).OnRead(handle, status);
+        }
+
+        private void OnRead(UvStreamHandle handle, int status)
+        {
+            if (status == 0)
+            {
+                // A zero status does not indicate an error or connection end. It indicates
+                // there is no data to be read right now.
+                // See the note at http://docs.libuv.org/en/v1.x/stream.html#c.uv_read_cb.
+                _receiveFromUV.Writer.Advance(0);
+                Task.Run(() => StartReading());
+                return;
+            }
+
+            var normalRead = status > 0;
+            var normalDone = status == EOF;
+            var errorDone = !(normalDone || normalRead);
+            var readCount = normalRead ? status : 0;
+
+            if (!normalRead)
+            {
+                handle.ReadStop();
+            }
+
+            IOException error = null;
+            if (errorDone)
+            {
+                Exception uvError;
+                handle.Libuv.Check(status, out uvError);
+                error = new IOException(uvError.Message, uvError);
+
+                // REVIEW: Should we treat ECONNRESET as an error?
+                // Ignore the error for now 
+                _receiveFromUV.Writer.Complete(error);
+            }
+            else
+            {
+                _receiveFromUV.Writer.Advance(readCount);
+
+                var task = _receiveFromUV.Writer.FlushAsync();
+
+                if (!task.IsCompleted)
+                {
+                    // If there's back pressure
+                    handle.ReadStop();
+
+                    // Resume reading when task continues
+                    task.AsTask().ContinueWith((t, state) => ((UvTcpConnection)state).StartReading(), this);
+                }
+            }
+        }
 
         private async Task ProcessWrites()
         {
@@ -223,66 +274,6 @@ namespace NetGear.Libuv
             }
         }
 
-        private void StartReading()
-        {
-            _handle.ReadStart(_allocCallback, _readCallback, this);
-        }
-
-        private static void ReadCallback(UvStreamHandle handle, int status, object state)
-        {
-            ((UvTcpConnection)state).OnRead(handle, status);
-        }
-
-        private void OnRead(UvStreamHandle handle, int status)
-        {
-            if (status == 0)
-            {
-                // A zero status does not indicate an error or connection end. It indicates
-                // there is no data to be read right now.
-                // See the note at http://docs.libuv.org/en/v1.x/stream.html#c.uv_read_cb.
-                _receiveFromUV.Writer.Advance(0);
-                Task.Run(() => StartReading());
-                return;
-            }
-
-            var normalRead = status > 0;
-            var normalDone = status == EOF;
-            var errorDone = !(normalDone || normalRead);
-            var readCount = normalRead ? status : 0;
-
-            if (!normalRead)
-            {
-                handle.ReadStop();
-            }
-
-            IOException error = null;
-            if (errorDone)
-            {
-                Exception uvError;
-                handle.Libuv.Check(status, out uvError);
-                error = new IOException(uvError.Message, uvError);
-
-                // REVIEW: Should we treat ECONNRESET as an error?
-                // Ignore the error for now 
-                _receiveFromUV.Writer.Complete(error);
-            }
-            else
-            {
-                _receiveFromUV.Writer.Advance(readCount);
-
-                var task = _receiveFromUV.Writer.FlushAsync();
-
-                if (!task.IsCompleted)
-                {
-                    // If there's back pressure
-                    handle.ReadStop();
-
-                    // Resume reading when task continues
-                    task.AsTask().ContinueWith((t, state) => ((UvTcpConnection)state).StartReading(), this);
-                }
-            }
-        }
-
         private static Uv.uv_buf_t AllocCallback(UvStreamHandle handle, int status, object state)
         {
             return ((UvTcpConnection)state).OnAlloc(handle, status);
@@ -295,5 +286,14 @@ namespace NetGear.Libuv
 
             return handle.Libuv.buf_init((IntPtr)pointer, _inputBuffer.Length);
         }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        { }
     }
 }

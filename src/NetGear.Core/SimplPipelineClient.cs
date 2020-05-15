@@ -15,7 +15,7 @@ namespace NetGear.Core
 
         public event Action<IMemoryOwner<byte>> Broadcast;
 
-        public SimplPipelineClient(IDuplexPipe pipe)
+        private SimplPipelineClient(IDuplexPipe pipe)
             : base(pipe)
         {
             _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();

@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Microsoft.Extensions.Logging;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -10,26 +11,31 @@ namespace NetGear.Libuv
 {
     public class UvWriteReq : UvRequest
     {
-        private readonly static Uv.uv_write_cb _uv_write_cb = (IntPtr ptr, int status) => UvWriteCallback(ptr, status);
+        private static readonly Uv.uv_write_cb _uv_write_cb = (IntPtr ptr, int status) => UvWriteCb(ptr, status);
 
         private IntPtr _bufs;
 
-        private Action<UvWriteReq, int, object> _callback;
-        private ReadOnlySequence<byte> _buffer;
+        private Action<UvWriteReq, int, UvException, object> _callback;
         private object _state;
         private const int BUFFER_COUNT = 4;
 
-        // 说明：自身 + buffer块数
+        private LibuvAwaitable<UvWriteReq> _awaitable = new LibuvAwaitable<UvWriteReq>();
         private List<GCHandle> _pins = new List<GCHandle>(BUFFER_COUNT + 1);
+        private List<MemoryHandle> _handles = new List<MemoryHandle>(BUFFER_COUNT + 1);
 
-        public UvWriteReq()
-            : base()
+        public UvWriteReq(ILibuvTrace logger)
+            : base(logger)
         { }
 
-        public void Init(UvLoopHandle loop)
+        public override void Init(UvThread thread)
         {
-            // 说明：因为需要提前分配writereq的内存空间，所以这里设置的BUFFER_COUNT是必要的
-            // 我们假定需要BUFFER_COUNT个缓存块，这样才能进行空间的预分配
+            DangerousInit(thread.Loop);
+
+            base.Init(thread);
+        }
+
+        public void DangerousInit(UvLoopHandle loop)
+        {
             var requestSize = loop.Libuv.req_size(Uv.RequestType.WRITE);
             var bufferSize = Marshal.SizeOf<Uv.uv_buf_t>() * BUFFER_COUNT;
             CreateMemory(
@@ -39,32 +45,38 @@ namespace NetGear.Libuv
             _bufs = handle + requestSize;
         }
 
-        public unsafe void Write(
+        public LibuvAwaitable<UvWriteReq> WriteAsync(UvStreamHandle handle, ReadOnlySequence<byte> buffer)
+        {
+            Write(handle, buffer, LibuvAwaitable<UvWriteReq>.Callback, _awaitable);
+            return _awaitable;
+        }
+
+        public LibuvAwaitable<UvWriteReq> WriteAsync(UvStreamHandle handle, ArraySegment<ArraySegment<byte>> bufs)
+        {
+            Write(handle, bufs, LibuvAwaitable<UvWriteReq>.Callback, _awaitable);
+            return _awaitable;
+        }
+
+        private unsafe void Write(
             UvStreamHandle handle,
             ReadOnlySequence<byte> buffer,
-            Action<UvWriteReq, int, object> callback,
+            Action<UvWriteReq, int, UvException, object> callback,
             object state)
         {
             try
             {
-                // Preserve the buffer for the async call
-                _buffer = buffer;
-
-                int nBuffers = 0;
+                var nBuffers = 0;
                 if (buffer.IsSingleSegment)
                 {
                     nBuffers = 1;
                 }
                 else
                 {
-                    foreach (var span in buffer)
+                    foreach (var _ in buffer)
                     {
                         nBuffers++;
                     }
                 }
-
-                // add GCHandle to keeps this SafeHandle alive while request processing
-                _pins.Add(GCHandle.Alloc(this, GCHandleType.Normal));
 
                 var pBuffers = (Uv.uv_buf_t*)_bufs;
                 if (nBuffers > BUFFER_COUNT)
@@ -79,17 +91,28 @@ namespace NetGear.Libuv
                 if (nBuffers == 1)
                 {
                     var memory = buffer.First;
-                    void* pointer = memory.Pin().Pointer;
-                    pBuffers[0] = Libuv.buf_init((IntPtr)pointer, memory.Length);
+                    var memoryHandle = memory.Pin();
+                    _handles.Add(memoryHandle);
+
+                    // Fast path for single buffer
+                    pBuffers[0] = Libuv.buf_init(
+                            (IntPtr)memoryHandle.Pointer,
+                            memory.Length);
                 }
                 else
                 {
-                    int i = 0;
-                    void* pointer;
+                    var index = 0;
                     foreach (var memory in buffer)
                     {
-                        pointer = memory.Pin().Pointer;
-                        pBuffers[i++] = Libuv.buf_init((IntPtr)pointer, memory.Length);
+                        // This won't actually pin the buffer since we're already using pinned memory
+                        var memoryHandle = memory.Pin();
+                        _handles.Add(memoryHandle);
+
+                        // create and pin each segment being written
+                        pBuffers[index] = Libuv.buf_init(
+                            (IntPtr)memoryHandle.Pointer,
+                            memory.Length);
+                        index++;
                     }
                 }
 
@@ -101,24 +124,108 @@ namespace NetGear.Libuv
             {
                 _callback = null;
                 _state = null;
-                Unpin(this);
+                UnpinGcHandles();
                 throw;
             }
         }
 
-        private static void Unpin(UvWriteReq req)
+        private void Write(
+            UvStreamHandle handle,
+            ArraySegment<ArraySegment<byte>> bufs,
+            Action<UvWriteReq, int, UvException, object> callback,
+            object state)
         {
-            foreach (var pin in req._pins)
-            {
-                pin.Free();
-            }
-            req._pins.Clear();
+            WriteArraySegmentInternal(handle, bufs, sendHandle: null, callback: callback, state: state);
         }
 
-        private static void UvWriteCallback(IntPtr ptr, int status)
+        public void Write2(
+            UvStreamHandle handle,
+            ArraySegment<ArraySegment<byte>> bufs,
+            UvStreamHandle sendHandle,
+            Action<UvWriteReq, int, UvException, object> callback,
+            object state)
+        {
+            WriteArraySegmentInternal(handle, bufs, sendHandle, callback, state);
+        }
+
+        private unsafe void WriteArraySegmentInternal(
+            UvStreamHandle handle,
+            ArraySegment<ArraySegment<byte>> bufs,
+            UvStreamHandle sendHandle,
+            Action<UvWriteReq, int, UvException, object> callback,
+            object state)
+        {
+            try
+            {
+                var pBuffers = (Uv.uv_buf_t*)_bufs;
+                var nBuffers = bufs.Count;
+                if (nBuffers > BUFFER_COUNT)
+                {
+                    // create and pin buffer array when it's larger than the pre-allocated one
+                    var bufArray = new Uv.uv_buf_t[nBuffers];
+                    var gcHandle = GCHandle.Alloc(bufArray, GCHandleType.Pinned);
+                    _pins.Add(gcHandle);
+                    pBuffers = (Uv.uv_buf_t*)gcHandle.AddrOfPinnedObject();
+                }
+
+                for (var index = 0; index < nBuffers; index++)
+                {
+                    // create and pin each segment being written
+                    var buf = bufs.Array[bufs.Offset + index];
+
+                    var gcHandle = GCHandle.Alloc(buf.Array, GCHandleType.Pinned);
+                    _pins.Add(gcHandle);
+                    pBuffers[index] = Libuv.buf_init(
+                        gcHandle.AddrOfPinnedObject() + buf.Offset,
+                        buf.Count);
+                }
+
+                _callback = callback;
+                _state = state;
+
+                if (sendHandle == null)
+                {
+                    _uv.write(this, handle, pBuffers, nBuffers, _uv_write_cb);
+                }
+                else
+                {
+                    _uv.write2(this, handle, pBuffers, nBuffers, sendHandle, _uv_write_cb);
+                }
+            }
+            catch
+            {
+                _callback = null;
+                _state = null;
+                UnpinGcHandles();
+                throw;
+            }
+        }
+
+        // Safe handle has instance method called Unpin
+        // so using UnpinGcHandles to avoid conflict
+        private void UnpinGcHandles()
+        {
+            var pinList = _pins;
+            var count = pinList.Count;
+            for (var i = 0; i < count; i++)
+            {
+                pinList[i].Free();
+            }
+            pinList.Clear();
+
+            var handleList = _handles;
+            count = handleList.Count;
+            for (var i = 0; i < count; i++)
+            {
+                handleList[i].Dispose();
+            }
+            handleList.Clear();
+        }
+
+        private static void UvWriteCb(IntPtr ptr, int status)
         {
             var req = FromIntPtr<UvWriteReq>(ptr);
-            Unpin(req);
+            req.UnpinGcHandles();
 
             var callback = req._callback;
             req._callback = null;
@@ -126,7 +233,21 @@ namespace NetGear.Libuv
             var state = req._state;
             req._state = null;
 
-            callback(req, status, state);
+            UvException error = null;
+            if (status < 0)
+            {
+                req.Libuv.Check(status, out error);
+            }
+
+            try
+            {
+                callback(req, status, error, state);
+            }
+            catch (Exception ex)
+            {
+                req._log.LogError(0, ex, "UvWriteCb");
+                throw;
+            }
         }
     }
 }

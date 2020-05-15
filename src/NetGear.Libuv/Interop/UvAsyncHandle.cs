@@ -15,9 +15,9 @@ namespace NetGear.Libuv
         private Action _callback;
         private Action<Action<IntPtr>, IntPtr> _queueCloseHandle;
 
-        public UvAsyncHandle() : base()
-        {
-        }
+        public UvAsyncHandle(ILibuvTrace logger)
+            : base(logger)
+        { }
 
         public void Init(UvLoopHandle loop, Action callback, Action<Action<IntPtr>, IntPtr> queueCloseHandle)
         {

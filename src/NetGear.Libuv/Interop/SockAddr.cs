@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Net;
+using System.Runtime.InteropServices;
 
 namespace NetGear.Libuv
 {
+    [StructLayout(LayoutKind.Sequential)]
     public struct SockAddr
     {
         // this type represents native memory occupied by sockaddr struct
@@ -18,7 +20,7 @@ namespace NetGear.Libuv
 
         public SockAddr(long ignored)
         {
-            _field3 = _field0 = _field1 = _field2 = _field3 = 0;
+            _field0 = _field1 = _field2 = _field3 = 0;
         }
 
         public unsafe IPEndPoint GetIPEndPoint()
@@ -30,7 +32,7 @@ namespace NetGear.Libuv
             // 0000 0000 0b99 0017  => The third and fourth bytes 990B is the actual port
             // 9103 e000 9848 0120  => IPv6 address is represented in the 128bit field1 and field2.
             // 54a3 3e9d 2411 efb9     Read these two 64-bit long from right to left byte by byte.
-            // 0000 0000 0000 0000
+            // 0000 0000 0000 0010  => Scope ID 0x10 (eg [::1%16]) the first 4 bytes of field3 in host byte order.
             //
             // Example 2: 10.135.34.141:39178 when adopt dual-stack sockets, IPv4 is mapped to IPv6
             //
@@ -56,12 +58,13 @@ namespace NetGear.Libuv
             // Reference:
             //  - Windows: https://msdn.microsoft.com/en-us/library/windows/desktop/ms740506(v=vs.85).aspx
             //  - Linux: https://github.com/torvalds/linux/blob/6a13feb9c82803e2b815eca72fa7a9f5561d7861/include/linux/socket.h
+            //  - Linux (sin6_scope_id): https://github.com/torvalds/linux/blob/5924bbecd0267d87c24110cbe2041b5075173a25/net/sunrpc/addr.c#L82
             //  - Apple: http://www.opensource.apple.com/source/xnu/xnu-1456.1.26/bsd/sys/socket.h
 
             // Quick calculate the port by mask the field and locate the byte 3 and byte 4
             // and then shift them to correct place to form a int.
             var port = ((int)(_field0 & 0x00FF0000) >> 8) | (int)((_field0 & 0xFF000000) >> 24);
-            
+
             int family = (int)_field0;
             if (PlatformApis.IsDarwin)
             {
@@ -90,7 +93,20 @@ namespace NetGear.Libuv
                     *((long*)(b + 8)) = _field2;
                 }
 
-                return new IPEndPoint(new IPAddress(bytes), port);
+                return new IPEndPoint(new IPAddress(bytes, ScopeId), port);
+            }
+        }
+
+        public uint ScopeId
+        {
+            get
+            {
+                return (uint)_field3;
+            }
+            set
+            {
+                _field3 &= unchecked((long)0xFFFFFFFF00000000);
+                _field3 |= value;
             }
         }
 

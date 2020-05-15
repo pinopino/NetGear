@@ -7,8 +7,8 @@ namespace NetGear.Libuv
 {
     public class UvPipeHandle : UvStreamHandle
     {
-        public UvPipeHandle()
-            : base()
+        public UvPipeHandle(ILibuvTrace logger)
+            : base(logger)
         { }
 
         public void Init(UvLoopHandle loop, Action<Action<IntPtr>, IntPtr> queueCloseHandle, bool ipc = false)
@@ -19,6 +19,11 @@ namespace NetGear.Libuv
                 loop.Libuv.handle_size(Uv.HandleType.NAMED_PIPE), queueCloseHandle);
 
             _uv.pipe_init(loop, this, ipc);
+        }
+
+        public void Open(IntPtr fileDescriptor)
+        {
+            _uv.pipe_open(this, fileDescriptor);
         }
 
         public void Bind(string name)

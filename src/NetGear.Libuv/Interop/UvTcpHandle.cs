@@ -9,8 +9,8 @@ namespace NetGear.Libuv
 {
     public class UvTcpHandle : UvStreamHandle
     {
-        public UvTcpHandle()
-            : base()
+        public UvTcpHandle(ILibuvTrace logger)
+            : base(logger)
         { }
 
         public void Init(UvLoopHandle loop, Action<Action<IntPtr>, IntPtr> queueCloseHandle)
@@ -23,21 +23,31 @@ namespace NetGear.Libuv
             _uv.tcp_init(loop, this);
         }
 
-        public void Bind(IPEndPoint endpoint)
+        public void Open(IntPtr fileDescriptor)
+        {
+            _uv.tcp_open(this, fileDescriptor);
+        }
+
+        public void Bind(IPEndPoint endPoint)
         {
             SockAddr addr;
-            var addressText = endpoint.Address.ToString();
+            var addressText = endPoint.Address.ToString();
 
-            Exception error1;
-            _uv.ip4_addr(addressText, endpoint.Port, out addr, out error1);
+            _uv.ip4_addr(addressText, endPoint.Port, out addr, out var error1);
 
             if (error1 != null)
             {
-                Exception error2;
-                _uv.ip6_addr(addressText, endpoint.Port, out addr, out error2);
+                _uv.ip6_addr(addressText, endPoint.Port, out addr, out var error2);
                 if (error2 != null)
                 {
                     throw error1;
+                }
+
+                if (endPoint.Address.ScopeId != addr.ScopeId)
+                {
+                    // IPAddress.ScopeId cannot be less than 0 or greater than 0xFFFFFFFF
+                    // https://msdn.microsoft.com/en-us/library/system.net.ipaddress.scopeid(v=vs.110).aspx
+                    addr.ScopeId = (uint)endPoint.Address.ScopeId;
                 }
             }
 
@@ -60,11 +70,6 @@ namespace NetGear.Libuv
             _uv.tcp_getsockname(this, out socketAddress, ref namelen);
 
             return socketAddress.GetIPEndPoint();
-        }
-
-        public void Open(IntPtr hSocket)
-        {
-            _uv.tcp_open(this, hSocket);
         }
 
         public void NoDelay(bool enable)

@@ -1,5 +1,4 @@
-﻿using NetGear.Core.Common;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;

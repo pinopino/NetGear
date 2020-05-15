@@ -3,17 +3,22 @@ using System.Collections.Generic;
 
 namespace NetGear.Libuv
 {
+    /// <summary>
+    /// libuv write请求复用池
+    /// </summary>
     public class WriteReqPool
     {
         private const int _maxPooledWriteReqs = 1024;
 
         private readonly UvThread _thread;
         private readonly Queue<UvWriteReq> _pool = new Queue<UvWriteReq>(_maxPooledWriteReqs);
+        private readonly ILibuvTrace _log;
         private bool _disposed;
 
-        public WriteReqPool(UvThread thread)
+        public WriteReqPool(UvThread thread, ILibuvTrace log)
         {
             _thread = thread;
+            _log = log;
         }
 
         public UvWriteReq Allocate()
@@ -30,8 +35,8 @@ namespace NetGear.Libuv
             }
             else
             {
-                req = new UvWriteReq();
-                req.Init(_thread.Loop);
+                req = new UvWriteReq(_log);
+                req.Init(_thread);
             }
 
             return req;

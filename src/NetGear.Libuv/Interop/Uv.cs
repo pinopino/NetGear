@@ -7,6 +7,9 @@ using System.Runtime.InteropServices;
 
 namespace NetGear.Libuv
 {
+    /// <summary>
+    /// libuv win32 api·â×°
+    /// </summary>
     public class Uv
     {
         public Uv()
@@ -26,11 +29,11 @@ namespace NetGear.Libuv
             _uv_unsafe_async_send = NativeMethods.uv_unsafe_async_send;
             _uv_tcp_init = NativeMethods.uv_tcp_init;
             _uv_tcp_bind = NativeMethods.uv_tcp_bind;
-            _uv_tcp_connect = NativeMethods.uv_tcp_connect;
             _uv_tcp_open = NativeMethods.uv_tcp_open;
             _uv_tcp_nodelay = NativeMethods.uv_tcp_nodelay;
             _uv_pipe_init = NativeMethods.uv_pipe_init;
             _uv_pipe_bind = NativeMethods.uv_pipe_bind;
+            _uv_pipe_open = NativeMethods.uv_pipe_open;
             _uv_listen = NativeMethods.uv_listen;
             _uv_accept = NativeMethods.uv_accept;
             _uv_pipe_connect = NativeMethods.uv_pipe_connect;
@@ -43,7 +46,6 @@ namespace NetGear.Libuv
                 _uv_write = NativeMethods.uv_write;
                 _uv_write2 = NativeMethods.uv_write2;
             }
-            _uv_shutdown = NativeMethods.uv_shutdown;
             _uv_err_name = NativeMethods.uv_err_name;
             _uv_strerror = NativeMethods.uv_strerror;
             _uv_loop_size = NativeMethods.uv_loop_size;
@@ -54,11 +56,11 @@ namespace NetGear.Libuv
             _uv_tcp_getpeername = NativeMethods.uv_tcp_getpeername;
             _uv_tcp_getsockname = NativeMethods.uv_tcp_getsockname;
             _uv_walk = NativeMethods.uv_walk;
+            _uv_timer_init = NativeMethods.uv_timer_init;
+            _uv_timer_start = NativeMethods.uv_timer_start;
+            _uv_timer_stop = NativeMethods.uv_timer_stop;
+            _uv_now = NativeMethods.uv_now;
         }
-
-        // Second ctor that doesn't set any fields only to be used by MockLibuv
-        internal Uv(bool onlyForTesting)
-        { }
 
         public readonly bool IsWindows;
 
@@ -79,7 +81,7 @@ namespace NetGear.Libuv
             throw GetError(statusCode);
         }
 
-        public void Check(int statusCode, out Exception error)
+        public void Check(int statusCode, out UvException error)
         {
             // Note: method is explicitly small so the success case is easily inlined
             error = statusCode < 0 ? GetError(statusCode) : null;
@@ -195,52 +197,6 @@ namespace NetGear.Libuv
         {
             handle.Validate();
             ThrowIfErrored(_uv_tcp_bind(handle, ref addr, flags));
-            if (PlatformApis.IsWindows)
-            {
-                tcp_bind_windows_extras(handle);
-            }
-        }
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void uv_connect_cb(IntPtr req, int status);
-
-        protected delegate void tcp_connect_func(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb);
-        protected tcp_connect_func _uv_tcp_connect;
-        public void tcp_connect(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb)
-        {
-            req.Validate();
-            handle.Validate();
-            _uv_tcp_connect(req, handle, ref addr, cb);
-        }
-
-        private unsafe void tcp_bind_windows_extras(UvTcpHandle handle)
-        {
-            const int SIO_LOOPBACK_FAST_PATH = -1744830448; // IOC_IN | IOC_WS2 | 16;
-            const int WSAEOPNOTSUPP = 10000 + 45; // (WSABASEERR+45)
-            const int SOCKET_ERROR = -1;
-
-            var socket = IntPtr.Zero;
-            ThrowIfErrored(_uv_fileno(handle, ref socket));
-
-            // Enable loopback fast-path for lower latency for localhost comms, like HttpPlatformHandler fronting
-            // http://blogs.technet.com/b/wincat/archive/2012/12/05/fast-tcp-loopback-performance-and-low-latency-with-windows-server-2012-tcp-loopback-fast-path.aspx
-            // https://github.com/libuv/libuv/issues/489
-            var optionValue = 1;
-            uint dwBytes = 0u;
-
-            var result = NativeMethods.WSAIoctl(socket, SIO_LOOPBACK_FAST_PATH, &optionValue, sizeof(int), null, 0, out dwBytes, IntPtr.Zero, IntPtr.Zero);
-            if (result == SOCKET_ERROR)
-            {
-                var errorId = NativeMethods.WSAGetLastError();
-                if (errorId == WSAEOPNOTSUPP)
-                {
-                    // This system is not >= Windows Server 2012, and the call is not supported.
-                }
-                else
-                {
-                    ThrowIfErrored(errorId);
-                }
-            }
         }
 
         protected Func<UvTcpHandle, IntPtr, int> _uv_tcp_open;
@@ -272,6 +228,13 @@ namespace NetGear.Libuv
             ThrowIfErrored(_uv_pipe_bind(handle, name));
         }
 
+        protected Func<UvPipeHandle, IntPtr, int> _uv_pipe_open;
+        public void pipe_open(UvPipeHandle handle, IntPtr hSocket)
+        {
+            handle.Validate();
+            ThrowIfErrored(_uv_pipe_open(handle, hSocket));
+        }
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void uv_connection_cb(IntPtr server, int status);
         protected Func<UvStreamHandle, int, uv_connection_cb, int> _uv_listen;
@@ -289,6 +252,8 @@ namespace NetGear.Libuv
             ThrowIfErrored(_uv_accept(server, client));
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void uv_connect_cb(IntPtr req, int status);
         protected Action<UvConnectRequest, UvPipeHandle, string, uv_connect_cb> _uv_pipe_connect;
         public void pipe_connect(UvConnectRequest req, UvPipeHandle handle, string name, uv_connect_cb cb)
         {
@@ -345,21 +310,11 @@ namespace NetGear.Libuv
 
         unsafe protected delegate int uv_write2_func(UvRequest req, UvStreamHandle handle, uv_buf_t* bufs, int nbufs, UvStreamHandle sendHandle, uv_write_cb cb);
         protected uv_write2_func _uv_write2;
-        unsafe public void write2(UvRequest req, UvStreamHandle handle, Uv.uv_buf_t* bufs, int nbufs, UvStreamHandle sendHandle, uv_write_cb cb)
+        unsafe public void write2(UvRequest req, UvStreamHandle handle, uv_buf_t* bufs, int nbufs, UvStreamHandle sendHandle, uv_write_cb cb)
         {
             req.Validate();
             handle.Validate();
             ThrowIfErrored(_uv_write2(req, handle, bufs, nbufs, sendHandle, cb));
-        }
-
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void uv_shutdown_cb(IntPtr req, int status);
-        protected Func<UvShutdownReq, UvStreamHandle, uv_shutdown_cb, int> _uv_shutdown;
-        public void shutdown(UvShutdownReq req, UvStreamHandle handle, uv_shutdown_cb cb)
-        {
-            req.Validate();
-            handle.Validate();
-            ThrowIfErrored(_uv_shutdown(req, handle, cb));
         }
 
         protected Func<int, IntPtr> _uv_err_name;
@@ -396,14 +351,14 @@ namespace NetGear.Libuv
 
         protected delegate int uv_ip4_addr_func(string ip, int port, out SockAddr addr);
         protected uv_ip4_addr_func _uv_ip4_addr;
-        public void ip4_addr(string ip, int port, out SockAddr addr, out Exception error)
+        public void ip4_addr(string ip, int port, out SockAddr addr, out UvException error)
         {
             Check(_uv_ip4_addr(ip, port, out addr), out error);
         }
 
         protected delegate int uv_ip6_addr_func(string ip, int port, out SockAddr addr);
         protected uv_ip6_addr_func _uv_ip6_addr;
-        public void ip6_addr(string ip, int port, out SockAddr addr, out Exception error)
+        public void ip6_addr(string ip, int port, out SockAddr addr, out UvException error)
         {
             Check(_uv_ip6_addr(ip, port, out addr), out error);
         }
@@ -415,6 +370,37 @@ namespace NetGear.Libuv
         {
             loop.Validate();
             _uv_walk(loop, walk_cb, arg);
+        }
+
+        protected Func<UvLoopHandle, UvTimerHandle, int> _uv_timer_init;
+        unsafe public void timer_init(UvLoopHandle loop, UvTimerHandle handle)
+        {
+            loop.Validate();
+            handle.Validate();
+            ThrowIfErrored(_uv_timer_init(loop, handle));
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void uv_timer_cb(IntPtr handle);
+        protected Func<UvTimerHandle, uv_timer_cb, long, long, int> _uv_timer_start;
+        unsafe public void timer_start(UvTimerHandle handle, uv_timer_cb cb, long timeout, long repeat)
+        {
+            handle.Validate();
+            ThrowIfErrored(_uv_timer_start(handle, cb, timeout, repeat));
+        }
+
+        protected Func<UvTimerHandle, int> _uv_timer_stop;
+        unsafe public void timer_stop(UvTimerHandle handle)
+        {
+            handle.Validate();
+            ThrowIfErrored(_uv_timer_stop(handle));
+        }
+
+        protected Func<UvLoopHandle, long> _uv_now;
+        unsafe public long now(UvLoopHandle loop)
+        {
+            loop.Validate();
+            return _uv_now(loop);
         }
 
         public delegate int uv_tcp_getsockname_func(UvTcpHandle handle, out SockAddr addr, ref int namelen);
@@ -548,14 +534,14 @@ namespace NetGear.Libuv
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_tcp_nodelay(UvTcpHandle handle, int enable);
 
-            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
-            public static extern void uv_tcp_connect(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb);
-
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_pipe_init(UvLoopHandle loop, UvPipeHandle handle, int ipc);
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_pipe_bind(UvPipeHandle loop, string name);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
+            public static extern int uv_pipe_open(UvPipeHandle handle, IntPtr hSocket);
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_listen(UvStreamHandle handle, int backlog, uv_connection_cb cb);
@@ -583,9 +569,6 @@ namespace NetGear.Libuv
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             unsafe public static extern int uv_write2(UvRequest req, UvStreamHandle handle, uv_buf_t* bufs, int nbufs, UvStreamHandle sendHandle, uv_write_cb cb);
-
-            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
-            public static extern int uv_shutdown(UvShutdownReq req, UvStreamHandle handle, uv_shutdown_cb cb);
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public extern static IntPtr uv_err_name(int err);
@@ -616,6 +599,18 @@ namespace NetGear.Libuv
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_walk(UvLoopHandle loop, uv_walk_cb walk_cb, IntPtr arg);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
+            unsafe public static extern int uv_timer_init(UvLoopHandle loop, UvTimerHandle handle);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
+            unsafe public static extern int uv_timer_start(UvTimerHandle handle, uv_timer_cb cb, long timeout, long repeat);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
+            unsafe public static extern int uv_timer_stop(UvTimerHandle handle);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
+            unsafe public static extern long uv_now(UvLoopHandle loop);
 
             [DllImport("WS2_32.dll", CallingConvention = CallingConvention.Winapi)]
             unsafe public static extern int WSAIoctl(

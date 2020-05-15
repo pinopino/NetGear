@@ -7,7 +7,8 @@ namespace NetGear.Libuv
 {
     public class UvException : Exception
     {
-        public UvException(string message, int statusCode) : base(message)
+        public UvException(string message, int statusCode)
+            : base(message)
         {
             StatusCode = statusCode;
         }
