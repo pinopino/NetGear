@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Net;
 using System.Threading.Tasks;
 
@@ -6,17 +7,16 @@ namespace NetGear.Libuv
 {
     public class UvTcpListener : IDisposable
     {
-        public event Action<UvTcpConnection> OnConnection;
-        private Action<UvStreamHandle, int, Exception, object> _onConnectionCallback;
+        private Action<UvStreamHandle, int, UvException, object> _onConnectionCallback;
         private Action<object> _startListeningCallback = state => ((UvTcpListener)state).Listen();
         private Action<object> _stopListeningCallback = state => ((UvTcpListener)state).Shutdown();
 
+        private bool _closed;
         private readonly IPEndPoint _endpoint;
         private readonly UvThread _thread;
         private UvTcpHandle _listenSocket;
 
-
-        private TaskCompletionSource<object> _startedTcs = new TaskCompletionSource<object>();
+        public ILibuvTrace Log => throw new NotImplementedException();
 
         public UvTcpListener(UvThread thread, IPEndPoint endpoint)
         {
@@ -27,16 +27,7 @@ namespace NetGear.Libuv
 
         public Task StartAsync()
         {
-            // TODO: Make idempotent
-            _thread.Post(_startListeningCallback, this);
-
-            return _startedTcs.Task;
-        }
-
-        public void Dispose()
-        {
-            // TODO: Make idempotent
-            _thread.Post(_stopListeningCallback, this);
+            return _thread.PostAsync(_startListeningCallback, this);
         }
 
         private void Shutdown()
@@ -46,35 +37,88 @@ namespace NetGear.Libuv
 
         private void Listen()
         {
-            // TODO: Error handling
-            _listenSocket = new UvTcpHandle();
-            _listenSocket.Init(_thread.Loop, null);
-            _listenSocket.NoDelay(true);
-            _listenSocket.Bind(_endpoint);
-            _listenSocket.Listen(10, _onConnectionCallback, this);
-
-            // Don't complete the task on the UV thread
-            Task.Run(() => _startedTcs.TrySetResult(null));
+            _listenSocket = new UvTcpHandle(Log);
+            try
+            {
+                _listenSocket.Init(_thread.Loop, _thread.QueueCloseHandle);
+                _listenSocket.NoDelay(true);
+                _listenSocket.Bind(_endpoint);
+                _listenSocket.Listen(UvConstants.ListenBacklog, _onConnectionCallback, this);
+            }
+            catch
+            {
+                _listenSocket?.Dispose();
+                throw;
+            }
         }
 
-        private void OnConnectionCallback(UvStreamHandle listenSocket, int status, Exception error, object state)
+        private void OnConnectionCallback(UvStreamHandle listenSocket, int status, UvException error, object state)
         {
             var listener = (UvTcpListener)state;
 
-            var acceptSocket = new UvTcpHandle();
+            if (error != null)
+            {
+                listener.Log.LogError(0, error, "Listener.ConnectionCallback");
+            }
+            else if (!listener._closed)
+            {
+                UvTcpHandle acceptSocket = null;
+                try
+                {
+                    acceptSocket = new UvTcpHandle(Log);
+                    acceptSocket.Init(listener._thread.Loop, listener._thread.QueueCloseHandle);
+                    acceptSocket.NoDelay(true);
 
+                    listenSocket.Accept(acceptSocket);
+
+                    _ = HandleConnectionAsync(acceptSocket);
+                }
+                catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
+                {
+                    Log.ConnectionReset("(null)");
+                    acceptSocket?.Dispose();
+                }
+                catch (UvException ex)
+                {
+                    Log.LogError(0, ex, "Listener.OnConnection");
+                    acceptSocket?.Dispose();
+                }
+            }
+        }
+
+        private async Task HandleConnectionAsync(UvTcpHandle socket)
+        {
             try
             {
-                acceptSocket.Init(listener._thread.Loop, null);
-                acceptSocket.NoDelay(true);
-                listenSocket.Accept(acceptSocket);
-                var connection = new UvTcpConnection(listener._thread, acceptSocket);
-                OnConnection?.Invoke(connection);
+                IPEndPoint remoteEndPoint = null;
+                IPEndPoint localEndPoint = null;
+
+                try
+                {
+                    remoteEndPoint = socket.GetPeerIPEndPoint();
+                    localEndPoint = socket.GetSockIPEndPoint();
+                }
+                catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
+                {
+                    Log.ConnectionReset("(null)");
+                    socket.Dispose();
+                    return;
+                }
+
+                var connection = new LibuvConnection(socket, Log, _thread, remoteEndPoint, localEndPoint);
+                await connection.Start();
+
+                connection.Dispose();
             }
-            catch (UvException)
+            catch (Exception ex)
             {
-                acceptSocket.Dispose();
+                Log.LogCritical(ex, $"Unexpected exception in {nameof(UvTcpListener)}.{nameof(HandleConnectionAsync)}.");
             }
+        }
+
+        public void Dispose()
+        {
+            _thread.Post(_stopListeningCallback, this);
         }
     }
 }

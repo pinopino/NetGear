@@ -67,8 +67,13 @@ namespace NetGear.Libuv
             {
                 handle = IntPtr.Zero;
 
-                // 说明：如果当前就是在对应的uv线程上那么直接“inline”执行release动作即可；
-                // 下方的else分支确保了非绑定uv线程如何post release动作到对应线程上 
+                // 说明：
+                // 如果当前就是在对应的uv线程上那么直接“inline”执行release动作即可；
+                // 下方的else分支确保了非绑定uv线程如何post release动作到对应线程上。
+                // 所以下一个问题就是为什么会出现非对应绑定线程？
+                // 我的一个猜测就是ReleaseHandle是从SafeHandle而来，这东西为了保证资源
+                // 的安全释放，完全有可能最后是由独立的析构线程来执行的；下面的原始注释
+                // 也印证了这一点。
                 if (Thread.CurrentThread.ManagedThreadId == ThreadId)
                 {
                     _uv.close(memory, _destroyMemory);

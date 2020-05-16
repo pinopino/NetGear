@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -44,7 +45,6 @@ namespace NetGear.Libuv
         private Queue<CloseHandle> _closeHandleAdding = new Queue<CloseHandle>(256);
         private Queue<CloseHandle> _closeHandleRunning = new Queue<CloseHandle>(256);
 
-
         // maximum times the work queues swapped and are processed in a single pass
         // as completing a task may immediately have write data to put on the network
         // otherwise it needs to wait till the next pass of the libuv loop
@@ -55,7 +55,6 @@ namespace NetGear.Libuv
         private bool _stopImmediate = false;
         private bool _initCompleted = false;
         private Exception _closeError;
-
 
         public UvThread(ILibuvTrace log)
         {
@@ -69,11 +68,14 @@ namespace NetGear.Libuv
             QueueCloseHandle = PostCloseHandle;
             QueueCloseAsyncHandle = EnqueueCloseHandle;
             WriteReqPool = new WriteReqPool(this, _log);
+            MemoryPool = KestrelMemoryPool.Create();
         }
 
         public UvLoopHandle Loop { get { return _loop; } }
 
         public WriteReqPool WriteReqPool { get; }
+
+        public MemoryPool<byte> MemoryPool { get; }
 
         public Exception FatalError => _closeError;
 
