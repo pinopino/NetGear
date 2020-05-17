@@ -1,8 +1,11 @@
-﻿using NetGear.Core;
+﻿using Microsoft.Extensions.Logging;
+using NetGear.Core;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO.Pipelines;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -82,26 +85,77 @@ namespace NetGear.Libuv
         }
 
         private bool _disposed;
-        private UvTcpListener _listener;
         private readonly ConcurrentDictionary<Client, long> _clients;
+        private readonly List<IAsyncDisposable> _listeners = new List<IAsyncDisposable>();
+        protected int _threadCount;
+        public List<UvThread> Threads { get; }
+        public ILibuvTrace Log => throw new NotImplementedException();
 
-        protected UvTcpServer()
+        protected UvTcpServer(int threadCount = 1)
         {
+            _threadCount = threadCount;
             _clients = new ConcurrentDictionary<Client, long>();
+            Threads = new List<UvThread>();
         }
 
-        public Task Start(IPEndPoint endPoint)
+        public async Task Start(IPEndPoint endPoint)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
 
-            _listener = new UvTcpListener(new UvThread(), endPoint);
-            _listener.OnConnection += Listener_OnConnection;
+            for (var index = 0; index < _threadCount; index++)
+            {
+                Threads.Add(new UvThread(Log));
+            }
 
-            return _listener.StartAsync();
+            foreach (var thread in Threads)
+            {
+                await thread.StartAsync().ConfigureAwait(false);
+            }
+
+            try
+            {
+                if (_threadCount == 1)
+                {
+                    var listener = new UvTcpListener(Threads[0], endPoint);
+                    _listeners.Add(listener);
+                    await listener.StartAsync().ConfigureAwait(false);
+                }
+                else
+                {
+
+                }
+            }
+            catch (UvException ex) when (ex.StatusCode == UvConstants.EADDRINUSE)
+            {
+                await StopAsync().ConfigureAwait(false);
+                throw new AddressInUseException(ex.Message, ex);
+            }
+            catch
+            {
+                await StopAsync().ConfigureAwait(false);
+                throw;
+            }
         }
 
-        private void Listener_OnConnection(UvTcpConnection connection)
+        public async Task StopAsync()
+        {
+            var disposeTasks = _listeners.Select(listener => listener.DisposeAsync()).ToArray();
+
+            if (!await WaitAsync(Task.WhenAll(disposeTasks), TimeSpan.FromSeconds(5)).ConfigureAwait(false))
+            {
+                Log.LogError(0, null, "Disposing listeners failed");
+            }
+
+            _listeners.Clear();
+        }
+
+        private static async Task<bool> WaitAsync(Task task, TimeSpan timeout)
+        {
+            return await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false) == task;
+        }
+
+        private void Listener_OnConnection(LibuvConnection connection)
         {
             var client = new Client(connection, this);
             AddClient(client);
