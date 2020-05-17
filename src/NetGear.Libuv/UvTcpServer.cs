@@ -117,7 +117,7 @@ namespace NetGear.Libuv
             {
                 if (_threadCount == 1)
                 {
-                    var listener = new UvTcpListener(Threads[0], endPoint);
+                    var listener = new UvListener(Threads[0], endPoint);
                     _listeners.Add(listener);
                     await listener.StartAsync().ConfigureAwait(false);
                 }
@@ -155,7 +155,7 @@ namespace NetGear.Libuv
             return await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false) == task;
         }
 
-        private void Listener_OnConnection(LibuvConnection connection)
+        private void Listener_OnConnection(UvConnection connection)
         {
             var client = new Client(connection, this);
             AddClient(client);

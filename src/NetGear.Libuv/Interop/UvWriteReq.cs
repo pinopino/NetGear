@@ -17,6 +17,8 @@ namespace NetGear.Libuv
 
         private Action<UvWriteReq, int, UvException, object> _callback;
         private object _state;
+        // 说明：
+        // uv那一套都得先分配内存，writereq需要携带buf所以只能先猜一个buffer大小
         private const int BUFFER_COUNT = 4;
 
         private LibuvAwaitable<UvWriteReq> _awaitable = new LibuvAwaitable<UvWriteReq>();
@@ -79,7 +81,7 @@ namespace NetGear.Libuv
                 }
 
                 var pBuffers = (Uv.uv_buf_t*)_bufs;
-                if (nBuffers > BUFFER_COUNT)
+                if (nBuffers > BUFFER_COUNT) // 说明：这里对应的就是大小猜错了的分支
                 {
                     // create and pin buffer array when it's larger than the pre-allocated one
                     var bufArray = new Uv.uv_buf_t[nBuffers];
@@ -88,6 +90,7 @@ namespace NetGear.Libuv
                     pBuffers = (Uv.uv_buf_t*)gcHandle.AddrOfPinnedObject();
                 }
 
+                // 说明：拿到正确的pBuffers之后，用传进来的buffer赋值
                 if (nBuffers == 1)
                 {
                     var memory = buffer.First;

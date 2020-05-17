@@ -15,23 +15,25 @@ namespace NetGear.Libuv
     /// A secondary listener is delegated requests from a primary listener via a named pipe or
     /// UNIX domain socket.
     /// </summary>
-    public class ListenerSecondary : IAsyncDisposable
+    public class UvListenerSecondary : IAsyncDisposable
     {
+        private bool _closed;
         private string _pipeName;
         private byte[] _pipeMessage;
         private IntPtr _ptr;
         private Uv.uv_buf_t _buf;
-        private bool _closed;
         private UvThread _thread;
 
-        public ListenerSecondary(UvThread thread)
+        public UvListenerSecondary(UvThread thread, ILibuvTrace log = null)
         {
+            Log = log;
+            _thread = thread;
             _ptr = Marshal.AllocHGlobal(4);
         }
 
-        UvPipeHandle DispatchPipe { get; set; }
+        UvPipeHandle DispatchPipe { set; get; }
 
-        public ILibuvTrace Log => throw new NotImplementedException();
+        public ILibuvTrace Log { set; get; }
 
         public Task StartAsync(
             string pipeName,
@@ -41,7 +43,7 @@ namespace NetGear.Libuv
             _pipeMessage = pipeMessage;
             _buf = _thread.Loop.Libuv.buf_init(_ptr, 4);
 
-            DispatchPipe = new UvPipeHandle(Log);
+            DispatchPipe = new UvPipeHandle(Log); // 说明：用这个连接到primary pipe上去
 
             var tcs = new TaskCompletionSource<int>(this, TaskCreationOptions.RunContinuationsAsynchronously);
             _thread.Post(StartCallback, tcs);
@@ -50,7 +52,7 @@ namespace NetGear.Libuv
 
         private static void StartCallback(TaskCompletionSource<int> tcs)
         {
-            var listener = (ListenerSecondary)tcs.Task.AsyncState;
+            var listener = (UvListenerSecondary)tcs.Task.AsyncState;
             listener.StartedCallback(tcs);
         }
 
@@ -77,7 +79,7 @@ namespace NetGear.Libuv
 
         private static void ConnectCallback(UvConnectRequest connect, int status, UvException error, TaskCompletionSource<int> tcs)
         {
-            var listener = (ListenerSecondary)tcs.Task.AsyncState;
+            var listener = (UvListenerSecondary)tcs.Task.AsyncState;
             _ = listener.ConnectedCallback(connect, status, error, tcs);
         }
 
@@ -94,14 +96,19 @@ namespace NetGear.Libuv
 
             try
             {
+                // 说明：
+                // 先开始readstart，
                 DispatchPipe.ReadStart(
-                    (handle, status2, state) => ((ListenerSecondary)state)._buf,
-                    (handle, status2, state) => ((ListenerSecondary)state).ReadStartCallback(handle, status2),
+                    (handle, status2, state) => ((UvListenerSecondary)state)._buf,
+                    (handle, status2, state) => ((UvListenerSecondary)state).ReadStartCallback(handle, status2),
                     this);
 
+                // 同时开始握手
                 writeReq.Init(_thread);
                 var result = await writeReq.WriteAsync(
                      DispatchPipe,
+                     // 这里就是连接初始双方握手用的协议，_pipeMessage从构造函数传过来，
+                     // primary也能拿到一个一样的msg。
                      new ArraySegment<ArraySegment<byte>>(new[] { new ArraySegment<byte>(_pipeMessage) }));
 
                 if (result.Error != null)
@@ -143,6 +150,7 @@ namespace NetGear.Libuv
                 return;
             }
 
+            // 说明：已经从管道正确的接收到了primary传过来的数据
             var acceptSocket = CreateAcceptSocket();
 
             try
@@ -183,33 +191,36 @@ namespace NetGear.Libuv
             return socket;
         }
 
-        private async Task HandleConnectionAsync(UvTcpHandle socket)
+        protected async Task HandleConnectionAsync(UvStreamHandle socket)
         {
             try
             {
                 IPEndPoint remoteEndPoint = null;
                 IPEndPoint localEndPoint = null;
 
-                try
+                if (socket is UvTcpHandle tcpHandle)
                 {
-                    remoteEndPoint = socket.GetPeerIPEndPoint();
-                    localEndPoint = socket.GetSockIPEndPoint();
-                }
-                catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
-                {
-                    Log.ConnectionReset("(null)");
-                    socket.Dispose();
-                    return;
+                    try
+                    {
+                        remoteEndPoint = tcpHandle.GetPeerIPEndPoint();
+                        localEndPoint = tcpHandle.GetSockIPEndPoint();
+                    }
+                    catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
+                    {
+                        Log.ConnectionReset("(null)");
+                        socket.Dispose();
+                        return;
+                    }
                 }
 
-                var connection = new LibuvConnection(socket, Log, _thread, remoteEndPoint, localEndPoint);
+                var connection = new UvConnection(socket, _thread, remoteEndPoint, localEndPoint, log: Log);
                 await connection.Start();
 
                 connection.Dispose();
             }
             catch (Exception ex)
             {
-                Log.LogCritical(ex, $"Unexpected exception in {nameof(UvTcpListener)}.{nameof(HandleConnectionAsync)}.");
+                Log.LogCritical(ex, $"Unexpected exception in {nameof(UvListener)}.{nameof(HandleConnectionAsync)}.");
             }
         }
 

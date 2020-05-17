@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Libuv
 {
-    public partial class LibuvConnection : TransportConnection, IDisposable
+    public partial class UvConnection : TransportConnection, IDisposable
     {
         private static readonly int MinAllocBufferSize = KestrelMemoryPool.MinimumSegmentSize / 2;
 
@@ -22,16 +22,19 @@ namespace NetGear.Libuv
 
         private readonly UvStreamHandle _socket;
         private readonly CancellationTokenSource _connectionClosedTokenSource = new CancellationTokenSource();
-
         private volatile ConnectionAbortedException _abortReason;
-
         private long _totalBytesWritten;
         private MemoryHandle _bufferHandle;
         private readonly Pipe _sendToUV, _receiveFromUV;
         private readonly PipeReader _input;
         private readonly PipeWriter _output;
 
-        public LibuvConnection(UvStreamHandle socket, ILibuvTrace log, UvThread thread, IPEndPoint remoteEndPoint, IPEndPoint localEndPoint)
+        public UvConnection(UvStreamHandle socket,
+            UvThread thread,
+            IPEndPoint remoteEndPoint, IPEndPoint localEndPoint,
+            PipeOptions sendPipeOptions = null, PipeOptions receivePipeOptions = null,
+            string name = null,
+            ILibuvTrace log = null)
         {
             _socket = socket;
 
@@ -41,8 +44,8 @@ namespace NetGear.Libuv
             LocalAddress = localEndPoint?.Address;
             LocalPort = localEndPoint?.Port ?? 0;
 
-            _sendToUV = new Pipe(); // read from this pipe and send to socket
-            _receiveFromUV = new Pipe(); // recv from socket and push to this pipe
+            _sendToUV = new Pipe(sendPipeOptions ?? PipeOptions.Default);
+            _receiveFromUV = new Pipe(receivePipeOptions ?? PipeOptions.Default);
             _input = _receiveFromUV.Reader;
             _output = _sendToUV.Writer;
 
@@ -84,7 +87,7 @@ namespace NetGear.Libuv
                     else if (UvConstants.IsConnectionReset(ex.StatusCode))
                     {
                         // Don't cause writes to throw for connection resets.
-                        inputError = new ConnectionResetException(ex.Message, ex);
+                        outputError = new ConnectionResetException(ex.Message, ex);
                     }
                     else
                     {
@@ -107,19 +110,19 @@ namespace NetGear.Libuv
 
                     // We're done with the socket now
                     _socket.Dispose();
-                    ThreadPool.QueueUserWorkItem(state => ((LibuvConnection)state).CancelConnectionClosedToken(), this);
+                    ThreadPool.QueueUserWorkItem(state => ((UvConnection)state).CancelConnectionClosedToken(), this);
                 }
             }
             catch (Exception e)
             {
-                Log.LogCritical(0, e, $"{nameof(LibuvConnection)}.{nameof(Start)}() {ConnectionId}");
+                Log.LogCritical(0, e, $"{nameof(UvConnection)}.{nameof(Start)}() {ConnectionId}");
             }
         }
 
         public override void Abort(ConnectionAbortedException abortReason)
         {
             _abortReason = abortReason;
-            _sendToUV.Reader.CancelPendingRead();
+            _receiveFromUV.Reader.CancelPendingRead();
 
             // This cancels any pending I/O.
             Thread.Post(s => s.Dispose(), _socket);
@@ -177,7 +180,7 @@ namespace NetGear.Libuv
             }
             catch (Exception ex)
             {
-                Log.LogError(0, ex, $"Unexpected exception in {nameof(LibuvConnection)}.{nameof(CancelConnectionClosedToken)}.");
+                Log.LogError(0, ex, $"Unexpected exception in {nameof(UvConnection)}.{nameof(CancelConnectionClosedToken)}.");
             }
         }
 

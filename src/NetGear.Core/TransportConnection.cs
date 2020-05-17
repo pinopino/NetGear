@@ -16,13 +16,14 @@ namespace NetGear.Core
         public TransportConnection()
         { }
 
+        public override string ConnectionId { get; set; }
+        public virtual long TotalBytesWritten { get; }
+        public virtual MemoryPool<byte> MemoryPool { get; }
+
         public IPAddress RemoteAddress { get; set; }
         public int RemotePort { get; set; }
         public IPAddress LocalAddress { get; set; }
         public int LocalPort { get; set; }
-        public override string ConnectionId { get; set; }
-        public virtual MemoryPool<byte> MemoryPool { get; }
-        public virtual long TotalBytesWritten { get; }
 
         public override IDictionary<object, object> Items
         {
@@ -51,7 +52,7 @@ namespace NetGear.Core
         // sufficient to abort the connection if there is backpressure.
         public override void Abort(ConnectionAbortedException abortReason)
         {
-            //Output.CancelPendingRead();
+            Input.CancelPendingRead();
         }
     }
 }

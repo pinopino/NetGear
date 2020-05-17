@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Libuv
 {
-    public partial class LibuvConnection
+    public partial class UvConnection
     {
         private void StartReading()
         {
@@ -16,14 +16,14 @@ namespace NetGear.Libuv
             {
                 // ReadStart() can throw a UvException in some cases (e.g. socket is no longer connected).
                 // This should be treated the same as OnRead() seeing a negative status.
-                Input.Complete(LogAndWrapReadError(ex));
+                _receiveFromUV.Writer.Complete(LogAndWrapReadError(ex));
             }
         }
 
         // Called on Libuv thread
         private static Uv.uv_buf_t AllocCallback(UvStreamHandle handle, int suggestedSize, object state)
         {
-            return ((LibuvConnection)state).OnAlloc(handle, suggestedSize);
+            return ((UvConnection)state).OnAlloc(handle, suggestedSize);
         }
 
         private unsafe Uv.uv_buf_t OnAlloc(UvStreamHandle handle, int suggestedSize)
@@ -36,7 +36,7 @@ namespace NetGear.Libuv
 
         private static void ReadCallback(UvStreamHandle handle, int status, object state)
         {
-            ((LibuvConnection)state).OnRead(handle, status);
+            ((UvConnection)state).OnRead(handle, status);
         }
 
         private void OnRead(UvStreamHandle handle, int status)
@@ -52,6 +52,7 @@ namespace NetGear.Libuv
             {
                 Log.ConnectionRead(ConnectionId, status);
 
+                // 说明：这里马上就调用flush了，实际可以压缩几次advance再批量flush
                 _receiveFromUV.Writer.Advance(status);
                 var flushTask = _receiveFromUV.Writer.FlushAsync();
 
@@ -65,7 +66,7 @@ namespace NetGear.Libuv
             else
             {
                 // Given a negative status, it's possible that OnAlloc wasn't called.
-                _socket.ReadStop();
+                _socket.ReadStop(); // 说明：先停下来
 
                 Exception error = null;
 
@@ -80,6 +81,7 @@ namespace NetGear.Libuv
                 }
 
                 // Complete after aborting the connection
+                // 标记写入端完成
                 _receiveFromUV.Writer.Complete(error);
             }
         }
@@ -87,10 +89,11 @@ namespace NetGear.Libuv
         private async Task ApplyBackpressureAsync(ValueTask<FlushResult> flushTask)
         {
             Log.ConnectionPause(ConnectionId);
-            _socket.ReadStop();
+            _socket.ReadStop(); // 说明：先停下来
 
-            var result = await flushTask;
+            var result = await flushTask; // 开始等待flush
 
+            // 再次起来的时候得先看看reader是不是已经结束或者cancel了
             // If the reader isn't complete or cancelled then resume reading
             if (!result.IsCompleted && !result.IsCanceled)
             {

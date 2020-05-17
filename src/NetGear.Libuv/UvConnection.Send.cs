@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Libuv
 {
-    public partial class LibuvConnection
+    public partial class UvConnection
     {
         public async Task WriteOutputAsync()
         {

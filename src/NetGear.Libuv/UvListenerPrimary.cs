@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -15,7 +14,7 @@ namespace NetGear.Libuv
     /// A primary listener waits for incoming connections on a specified socket. Incoming
     /// connections may be passed to a secondary listener to handle.
     /// </summary>
-    public class ListenerPrimary : UvTcpListener
+    public class UvListenerPrimary : UvListener
     {
         // The list of pipes that can be dispatched to (where we've confirmed the _pipeMessage)
         private readonly List<UvPipeHandle> _dispatchPipes;
@@ -31,8 +30,8 @@ namespace NetGear.Libuv
         // but it has no other functional significance
         private readonly ArraySegment<ArraySegment<byte>> _dummyMessage;
 
-        public ListenerPrimary(UvThread thread, IPEndPoint endpoint)
-            : base(thread, endpoint)
+        public UvListenerPrimary(UvThread thread, IEndPointInformation endpoint, ILibuvTrace log = null)
+            : base(thread, endpoint, log)
         {
             _dispatchPipes = new List<UvPipeHandle>();
             _createdPipes = new List<UvPipeHandle>();
@@ -60,16 +59,16 @@ namespace NetGear.Libuv
             // 这里我只能假设监听开始后客户端都还没有连接上来，
             await StartAsync().ConfigureAwait(false);
             // 此时赶紧把管道抽起来，有几个secondary listener就创建几个管道
-            await _thread.PostAsync(listener => listener.PostCallback(), this).ConfigureAwait(false);
+            await Thread.PostAsync(listener => listener.PostCallback(), this).ConfigureAwait(false);
         }
 
         private void PostCallback()
         {
             ListenPipe = new UvPipeHandle(Log);
-            ListenPipe.Init(_thread.Loop, _thread.QueueCloseHandle, false);
+            ListenPipe.Init(Thread.Loop, Thread.QueueCloseHandle, false);
             ListenPipe.Bind(_pipeName);
             ListenPipe.Listen(UvConstants.ListenBacklog,
-                (pipe, status, error, state) => ((ListenerPrimary)state).OnListenPipe(pipe, status, error), this);
+                (pipe, status, error, state) => ((UvListenerPrimary)state).OnListenPipe(pipe, status, error), this);
         }
 
         private void OnListenPipe(UvStreamHandle pipe, int status, UvException error)
@@ -79,15 +78,19 @@ namespace NetGear.Libuv
                 return;
             }
 
+            // 说明：secondary pipe连接上来
             var dispatchPipe = new UvPipeHandle(Log);
             // Add to the list of created pipes for disposal tracking
             _createdPipes.Add(dispatchPipe);
 
             try
             {
-                dispatchPipe.Init(_thread.Loop, _thread.QueueCloseHandle, true);
+                dispatchPipe.Init(Thread.Loop, Thread.QueueCloseHandle, true);
                 pipe.Accept(dispatchPipe);
 
+                // 说明：
+                // 相当于跟那几个secondary pipe约定好的协议，如果遵守了说明是kestrel的管道，
+                // 那么随后就可以派发conn到管道对端去，否则不做任何操作。
                 // Ensure client sends "Kestrel" before adding pipe to _dispatchPipes.
                 var readContext = new PipeReadContext(this);
                 dispatchPipe.ReadStart(
@@ -102,7 +105,7 @@ namespace NetGear.Libuv
             }
         }
 
-        protected override void DispatchConnection(UvTcpHandle socket)
+        protected override void DispatchConnection(UvStreamHandle socket)
         {
             var index = _dispatchIndex++ % (_dispatchPipes.Count + 1);
             if (index == _dispatchPipes.Count)
@@ -116,7 +119,7 @@ namespace NetGear.Libuv
                 var write = new UvWriteReq(Log);
                 try
                 {
-                    write.Init(_thread);
+                    write.Init(Thread);
                     write.Write2(
                         dispatchPipe,
                         _dummyMessage,
@@ -189,9 +192,9 @@ namespace NetGear.Libuv
                 _fileCompletionInfoPtr = IntPtr.Zero;
             }
 
-            if (_thread.FatalError == null && ListenPipe != null)
+            if (Thread.FatalError == null && ListenPipe != null)
             {
-                await _thread.PostAsync(listener =>
+                await Thread.PostAsync(listener =>
                 {
                     listener.ListenPipe.Dispose();
 
@@ -207,13 +210,13 @@ namespace NetGear.Libuv
         {
             private const int _bufferLength = 16;
 
-            private readonly ListenerPrimary _listener;
+            private readonly UvListenerPrimary _listener;
             private readonly byte[] _buf = new byte[_bufferLength];
             private readonly IntPtr _bufPtr;
             private GCHandle _bufHandle;
             private int _bytesRead;
 
-            public PipeReadContext(ListenerPrimary listener)
+            public PipeReadContext(UvListenerPrimary listener)
             {
                 _listener = listener;
                 _bufHandle = GCHandle.Alloc(_buf, GCHandleType.Pinned);
