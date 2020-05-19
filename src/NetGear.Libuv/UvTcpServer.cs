@@ -86,16 +86,18 @@ namespace NetGear.Libuv
 
         private bool _disposed;
         private readonly ConcurrentDictionary<Client, long> _clients;
+        private readonly IEndPointInformation _endPointInformation;
         private readonly List<IAsyncDisposable> _listeners = new List<IAsyncDisposable>();
         protected int _threadCount;
         public List<UvThread> Threads { get; }
-        public ILibuvTrace Log => throw new NotImplementedException();
+        public ILibuvTrace Log { set; get; }
 
-        protected UvTcpServer(int threadCount = 1)
+        protected UvTcpServer(int threadCount = 1, ILibuvTrace log = null)
         {
             _threadCount = threadCount;
             _clients = new ConcurrentDictionary<Client, long>();
             Threads = new List<UvThread>();
+            Log = log;
         }
 
         public async Task Start(IPEndPoint endPoint)
@@ -115,15 +117,28 @@ namespace NetGear.Libuv
 
             try
             {
+                var listenOption = new ListenOptions(endPoint);
                 if (_threadCount == 1)
                 {
-                    var listener = new UvListener(Threads[0], endPoint);
+                    var listener = new UvListener(Threads[0], listenOption, Log);
                     _listeners.Add(listener);
                     await listener.StartAsync().ConfigureAwait(false);
                 }
                 else
                 {
+                    var pipeName = (PlatformApis.IsWindows ? @"\\.\pipe\kestrel_" : "/tmp/kestrel_") + Guid.NewGuid().ToString("n");
+                    var pipeMessage = Guid.NewGuid().ToByteArray();
 
+                    var listenerPrimary = new UvListenerPrimary(Threads[0], listenOption, Log);
+                    _listeners.Add(listenerPrimary);
+                    await listenerPrimary.StartAsync(pipeName, pipeMessage).ConfigureAwait(false);
+
+                    foreach (var thread in Threads.Skip(1))
+                    {
+                        var listenerSecondary = new UvListenerSecondary(thread, Log);
+                        _listeners.Add(listenerSecondary);
+                        await listenerSecondary.StartAsync(pipeName, pipeMessage).ConfigureAwait(false);
+                    }
                 }
             }
             catch (UvException ex) when (ex.StatusCode == UvConstants.EADDRINUSE)
@@ -159,7 +174,7 @@ namespace NetGear.Libuv
         {
             var client = new Client(connection, this);
             AddClient(client);
-            Console.WriteLine($"新连接已建立<{connection.EndPoint}>，当前总连接数：{ClientsCount}");
+            Console.WriteLine($"新连接已建立<>，当前总连接数：{ClientsCount}");
             client.RunAsync();
         }
 

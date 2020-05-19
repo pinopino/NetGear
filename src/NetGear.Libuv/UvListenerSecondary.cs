@@ -97,7 +97,7 @@ namespace NetGear.Libuv
             try
             {
                 // 说明：
-                // 先开始readstart，
+                // 先开始readstart（我们需要正常开始处理扔过来的connection了），
                 DispatchPipe.ReadStart(
                     (handle, status2, state) => ((UvListenerSecondary)state)._buf,
                     (handle, status2, state) => ((UvListenerSecondary)state).ReadStartCallback(handle, status2),
