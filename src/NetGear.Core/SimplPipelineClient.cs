@@ -8,25 +8,25 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
-    public class SimplPipelineClient : SimplPipeline
+    public class DuplexPipeClient : DuplexPipe
     {
         private int _nextMessageId;
         private Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>> _awaitingResponses;
 
         public event Action<IMemoryOwner<byte>> Broadcast;
 
-        private SimplPipelineClient(IDuplexPipe pipe)
+        private DuplexPipeClient(IDuplexPipe pipe)
             : base(pipe)
         {
             _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();
             StartReceiveLoopAsync().FireAndForget();
         }
 
-        public static async Task<SimplPipelineClient> ConnectAsync(IPEndPoint endPoint)
+        public static async Task<DuplexPipeClient> ConnectAsync(IPEndPoint endPoint)
         {
             var socketConnection = await SocketConnection.ConnectAsync(endPoint,
                 onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
-            return new SimplPipelineClient(socketConnection);
+            return new DuplexPipeClient(socketConnection);
         }
 
         public ValueTask SendAsync(ReadOnlyMemory<byte> message) => WriteAsync(message, 0);

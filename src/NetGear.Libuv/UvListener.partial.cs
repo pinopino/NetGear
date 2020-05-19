@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
 using System.Net;
+using System.Net.Security;
 using System.Threading.Tasks;
 
 namespace NetGear.Libuv
@@ -133,11 +134,11 @@ namespace NetGear.Libuv
 
         protected async Task HandleConnectionAsync(UvStreamHandle socket)
         {
+            IPEndPoint remoteEndPoint = null;
+            IPEndPoint localEndPoint = null;
+
             try
             {
-                IPEndPoint remoteEndPoint = null;
-                IPEndPoint localEndPoint = null;
-
                 if (socket is UvTcpHandle tcpHandle)
                 {
                     try
@@ -154,13 +155,16 @@ namespace NetGear.Libuv
                 }
 
                 var connection = new UvConnection(socket, Thread, remoteEndPoint, localEndPoint, log: Log);
+                OnClientConnected?.Invoke(connection, remoteEndPoint);
                 await connection.Start();
 
                 connection.Dispose();
+                OnClientDisconnected?.Invoke(remoteEndPoint);
             }
             catch (Exception ex)
             {
                 Log.LogCritical(ex, $"Unexpected exception in {nameof(UvListener)}.{nameof(HandleConnectionAsync)}.");
+                OnClientFaulted?.Invoke(remoteEndPoint, ex);
             }
         }
 

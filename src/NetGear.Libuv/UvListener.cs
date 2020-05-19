@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using NetGear.Core;
+using System;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace NetGear.Libuv
@@ -11,6 +13,12 @@ namespace NetGear.Libuv
         public UvStreamHandle ListenSocket { set; get; }
         public ILibuvTrace Log { set; get; }
         public IEndPointInformation EndPointInformation { get; set; }
+
+        public event Action<EndPoint> OnServerStarted;
+        public event Action<Exception> OnServerFaulted;
+        public event Action<EndPoint> OnClientDisconnected;
+        public event Action<EndPoint, Exception> OnClientFaulted;
+        public event Action<UvConnection, EndPoint> OnClientConnected;
 
         public UvListener(UvThread thread, IEndPointInformation endpoint, ILibuvTrace log = null)
         {
@@ -30,6 +38,7 @@ namespace NetGear.Libuv
             {
                 ListenSocket = CreateListenSocket();
                 ListenSocket.Listen(UvConstants.ListenBacklog, ConnectionCallback, this);
+                OnServerStarted?.Invoke(EndPointInformation.IPEndPoint);
             }
             catch
             {

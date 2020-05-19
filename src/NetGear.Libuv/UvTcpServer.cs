@@ -14,7 +14,7 @@ namespace NetGear.Libuv
 {
     public abstract class UvTcpServer : IDisposable
     {
-        private class Client : SimplPipeline
+        private class Client : DuplexPipe
         {
             public Task RunAsync(CancellationToken cancellationToken = default)
                 => StartReceiveLoopAsync(cancellationToken);
@@ -170,12 +170,40 @@ namespace NetGear.Libuv
             return await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false) == task;
         }
 
-        private void Listener_OnConnection(UvConnection connection)
+        private void RegisterHandlerOn(UvListener listener)
+        {
+            listener.OnServerStarted += Server_OnStarted;
+            listener.OnServerFaulted += Server_OnServerFaulted;
+            listener.OnClientConnected += Server_OnClientConnected;
+            listener.OnClientDisconnected += Server_OnClientDisconnected;
+            listener.OnClientFaulted += Server_OnClientFaulted;
+        }
+
+        private void Server_OnStarted(EndPoint endPoint)
+        {
+            Console.WriteLine($"服务端开始监听@{endPoint}");
+        }
+
+        private void Server_OnServerFaulted(Exception exception)
+        {
+            Console.WriteLine($"服务端异常，消息：{exception.Message}");
+        }
+
+        private void Server_OnClientConnected(UvConnection connection, EndPoint remoteEndPoint)
         {
             var client = new Client(connection, this);
             AddClient(client);
-            Console.WriteLine($"新连接已建立<>，当前总连接数：{ClientsCount}");
-            client.RunAsync();
+            Console.WriteLine($"新连接已建立<{remoteEndPoint}>，当前总连接数：{ClientsCount}");
+        }
+
+        private void Server_OnClientFaulted(EndPoint client, Exception exception)
+        {
+            Console.WriteLine($"连接<{client}>异常，消息：{exception.Message}");
+        }
+
+        private void Server_OnClientDisconnected(EndPoint client)
+        {
+            Console.WriteLine($"连接<{client}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
         }
 
         public int ClientsCount

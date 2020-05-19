@@ -8,12 +8,12 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
-    public abstract class SimplPipelineServer : IDisposable
+    public abstract class DuplexPipeServer : IDisposable
     {
         private class SimplListener : SocketListener
         {
-            private SimplPipelineServer _server;
-            public SimplListener(SimplPipelineServer server)
+            private DuplexPipeServer _server;
+            public SimplListener(DuplexPipeServer server)
                 => _server = server;
 
             protected override Task OnClientConnectedAsync(in ClientConnection connection)
@@ -45,13 +45,13 @@ namespace NetGear.Core
             }
         }
 
-        private class Client : SimplPipeline
+        private class Client : DuplexPipe
         {
             public Task RunAsync(CancellationToken cancellationToken = default)
                 => StartReceiveLoopAsync(cancellationToken);
 
-            private readonly SimplPipelineServer _server;
-            public Client(IDuplexPipe pipe, SimplPipelineServer server)
+            private readonly DuplexPipeServer _server;
+            public Client(IDuplexPipe pipe, DuplexPipeServer server)
                 : base(pipe) => _server = server;
 
             public ValueTask SendAsync(ReadOnlyMemory<byte> message)
@@ -127,7 +127,7 @@ namespace NetGear.Core
         // 做了个示例，比如我们记录下时间戳如果同一个客户端多次上来又断掉可能就要小心了。
         private readonly ConcurrentDictionary<Client, long> _clients;
 
-        protected SimplPipelineServer()
+        protected DuplexPipeServer()
         {
             _listener = new SimplListener(this);
             _clients = new ConcurrentDictionary<Client, long>();
@@ -170,7 +170,7 @@ namespace NetGear.Core
 
         // 说明：
         // 注意这两个函数的微妙区别，正常的请求响应循环一问一答这种就是ReceiveForReply
-        // 而偶然收到客户端独立发过来的消息就是Receive，其实不加以区别问题也不大
+        // 而偶然收到客户端独立发过来的消息就是Receive，当然不加以区别问题也不大
         protected virtual ValueTask OnReceiveAsync(IMemoryOwner<byte> message) => default;
 
         protected abstract ValueTask<IMemoryOwner<byte>> OnReceiveForReplyAsync(IMemoryOwner<byte> message);

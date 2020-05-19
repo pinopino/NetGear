@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
-    public abstract class SimplPipeline : IDisposable
+    public abstract class DuplexPipe : IDisposable
     {
         private IDuplexPipe _pipe;
         private readonly SemaphoreSlim _singleWriter = new SemaphoreSlim(1);
@@ -16,7 +16,7 @@ namespace NetGear.Core
         // SimplPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；
         // 同时SimplPipeline自己也是一个驱动（含有更多业务上的味道）由它负责驱动下层的pipe读写。
         // 这主要就体现在StartReceiveLoopAsync和WriteAsync两个方法上
-        protected SimplPipeline(IDuplexPipe pipe)
+        protected DuplexPipe(IDuplexPipe pipe)
         {
             if (pipe == null)
                 throw new ArgumentNullException(nameof(pipe));

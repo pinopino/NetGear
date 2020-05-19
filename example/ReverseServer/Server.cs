@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ReverseServer
 {
-    public class Server : SimplPipelineServer
+    public class Server : DuplexPipeServer
     {
         protected override ValueTask<IMemoryOwner<byte>> OnReceiveForReplyAsync(IMemoryOwner<byte> message)
         {
