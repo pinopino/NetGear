@@ -100,7 +100,7 @@ namespace NetGear.Libuv
             Log = log;
         }
 
-        public async Task Start(IPEndPoint endPoint)
+        public async Task StartAsync(IPEndPoint endPoint)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());

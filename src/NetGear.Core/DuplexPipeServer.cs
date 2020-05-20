@@ -10,56 +10,50 @@ namespace NetGear.Core
 {
     public abstract class DuplexPipeServer : IDisposable
     {
-        private class SimplListener : SocketListener
+        /// <summary>
+        /// The state of a client connection
+        /// </summary>
+        protected readonly struct ClientConnection
         {
-            private DuplexPipeServer _server;
-            public SimplListener(DuplexPipeServer server)
-                => _server = server;
-
-            protected override Task OnClientConnectedAsync(in ClientConnection connection)
+            internal ClientConnection(IDuplexPipe transport, EndPoint remoteEndPoint)
             {
-                var client = new Client(connection.Transport, _server);
-                _server.AddClient(client);
-                Console.WriteLine($"新连接已建立<{connection.RemoteEndPoint}>，当前总连接数：{_server.ClientsCount}");
-                return client.RunAsync();
+                Transport = transport;
+                RemoteEndPoint = remoteEndPoint;
             }
 
-            protected override void OnStarted(EndPoint endPoint)
-            {
-                Console.WriteLine($"服务端开始监听@{endPoint}");
-            }
+            /// <summary>
+            /// The transport to use for this connection
+            /// </summary>
+            public IDuplexPipe Transport { get; }
 
-            protected override void OnClientDisconnected(in ClientConnection client)
-            {
-                Console.WriteLine($"连接<{client.RemoteEndPoint}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
-            }
-
-            protected override void OnClientFaulted(in ClientConnection client, Exception exception)
-            {
-                Console.WriteLine($"连接<{client.RemoteEndPoint}>异常，消息：{exception.Message}");
-            }
-
-            protected override void OnServerFaulted(Exception exception)
-            {
-                Console.WriteLine($"服务端异常，消息：{exception.Message}");
-            }
+            /// <summary>
+            /// The remote endpoint that the client connected from
+            /// </summary>
+            public EndPoint RemoteEndPoint { get; }
         }
 
-        private class Client : DuplexPipe
+        protected class Client : DuplexPipe
         {
+            private readonly DuplexPipeServer _server;
+
+            public EndPoint RemoteEndPoint { get; }
+
+            public Client(IDuplexPipe pipe, EndPoint remoteEndPoint, DuplexPipeServer server)
+                : base(pipe)
+            {
+                _server = server;
+                RemoteEndPoint = remoteEndPoint;
+            }
+
             public Task RunAsync(CancellationToken cancellationToken = default)
                 => StartReceiveLoopAsync(cancellationToken);
-
-            private readonly DuplexPipeServer _server;
-            public Client(IDuplexPipe pipe, DuplexPipeServer server)
-                : base(pipe) => _server = server;
 
             public ValueTask SendAsync(ReadOnlyMemory<byte> message)
             {
                 return WriteAsync(message, 0);
             }
 
-            // 说明：函数内部逻辑如此扭曲原因参考SimplPipeline.cs中WriteAsync方法
+            // 说明：函数内部逻辑如此扭曲原因参考DuplexPipe.cs中WriteAsync方法
             protected sealed override ValueTask OnReceiveAsync(ReadOnlySequence<byte> payload, int messageId)
             {
                 // 因为不关心该方法的task结果，所以这里直接void
@@ -89,7 +83,7 @@ namespace NetGear.Core
                 try
                 {
                     // 说明：
-                    // SimplPipelineClient也给了个send方法，所以这里我们需要处理messageid为0的情况
+                    // DuplexPipelineClient也给了个send方法，所以这里我们需要处理messageid为0的情况
                     if (messageId == 0)
                     {
                         var pending = _server.OnReceiveAsync(msg);
@@ -122,15 +116,56 @@ namespace NetGear.Core
         }
 
         private bool _disposed;
-        private readonly SimplListener _listener;
+        private PipeOptions _sendPipeOptions;
+        private PipeOptions _receivePipeOptions;
+        private readonly SocketListener _listener;
+        private readonly Action<object> RunClientAsync;
+
         // value为客户端连接上来的时间戳，对于客户端来说服务端可以做很多事情。这里只是
         // 做了个示例，比如我们记录下时间戳如果同一个客户端多次上来又断掉可能就要小心了。
         private readonly ConcurrentDictionary<Client, long> _clients;
 
-        protected DuplexPipeServer()
+        protected DuplexPipeServer(
+            int backlog = 20,
+            PipeOptions sendPipeOptions = null,
+            PipeOptions receivePipeOptions = null)
         {
-            _listener = new SimplListener(this);
             _clients = new ConcurrentDictionary<Client, long>();
+
+            _listener = new SocketListener(backlog, sendPipeOptions, receivePipeOptions);
+            _listener.OnListenStarted += OnServerStarted;
+            _listener.OnListenFaulted += OnServerFaulted;
+            _listener.OnListenAccept += connection => RunClientAsync(
+                new ClientConnection(connection, connection.Socket.RemoteEndPoint));
+
+            RunClientAsync = async boxed =>
+            {
+                var connection = (ClientConnection)boxed;
+                var client = new Client(connection.Transport, connection.RemoteEndPoint, this);
+                AddClient(client);
+
+                try
+                {
+                    OnClientConnected(client);
+                    await client.RunAsync().ConfigureAwait(false);
+                    try { client.Input.Complete(); } catch { }
+                    try { client.Output.Complete(); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    try { client.Input.Complete(ex); } catch { }
+                    try { client.Output.Complete(ex); } catch { }
+                    OnClientFaulted(client, ex);
+                }
+                finally
+                {
+                    if (client.Transport is IDisposable d)
+                    {
+                        try { d.Dispose(); } catch { }
+                    }
+                    RemoveClient(client);
+                }
+            };
         }
 
         public void Start(IPEndPoint endPoint)
@@ -139,6 +174,46 @@ namespace NetGear.Core
                 throw new ObjectDisposedException(ToString());
 
             _listener.Start(endPoint);
+        }
+
+        /// <summary>
+        /// Invoked when the server starts
+        /// </summary>
+        protected virtual void OnServerStarted(EndPoint endPoint)
+        {
+            Console.WriteLine($"服务端开始监听@{endPoint}");
+        }
+
+        /// <summary>
+        /// Invoked when the server has faulted
+        /// </summary>
+        protected virtual void OnServerFaulted(Exception exception)
+        {
+            Console.WriteLine($"服务端异常，消息：{exception.Message}");
+        }
+
+        /// <summary>
+        /// Invoked when a new client connects
+        /// </summary>
+        protected virtual void OnClientConnected(Client client)
+        {
+            Console.WriteLine($"新连接已建立<{client.RemoteEndPoint}>，当前总连接数：{ClientsCount}");
+        }
+
+        /// <summary>
+        /// Invoked when a client has disconnected
+        /// </summary>
+        protected virtual void OnClientDisconnected(Client client)
+        {
+            Console.WriteLine($"连接<{client.RemoteEndPoint}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
+        }
+
+        /// <summary>
+        /// Invoked when a client has faulted
+        /// </summary>
+        protected virtual void OnClientFaulted(Client client, Exception exception)
+        {
+            Console.WriteLine($"连接<{client.RemoteEndPoint}>异常，消息：{exception.Message}");
         }
 
         public int ClientsCount

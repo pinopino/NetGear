@@ -12,9 +12,13 @@ namespace NetGear.Core
         private IDuplexPipe _pipe;
         private readonly SemaphoreSlim _singleWriter = new SemaphoreSlim(1);
 
+        public PipeReader Input { get { return _pipe.Input; } }
+        public PipeWriter Output { get { return _pipe.Output; } }
+        public IDuplexPipe Transport { get { return _pipe; } }
+
         // 说明：
-        // SimplPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；
-        // 同时SimplPipeline自己也是一个驱动（含有更多业务上的味道）由它负责驱动下层的pipe读写。
+        // DuplexPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；
+        // 同时DuplexPipeline自己也是一个驱动（含有更多业务上的味道）由它负责驱动下层的pipe读写。
         // 这主要就体现在StartReceiveLoopAsync和WriteAsync两个方法上
         protected DuplexPipe(IDuplexPipe pipe)
         {

@@ -109,16 +109,16 @@ namespace NetGear.Core
         private SocketConnection(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
             SocketConnectionOptions socketConnectionOptions, string name = null)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                name = GetType().Name;
-
-            Name = name.Trim();
-            if (sendPipeOptions == null) 
-                sendPipeOptions = PipeOptions.Default;
-            if (receivePipeOptions == null) 
-                receivePipeOptions = PipeOptions.Default;
             if (socket == null)
                 throw new ArgumentNullException(nameof(socket));
+
+            if (string.IsNullOrWhiteSpace(name))
+                name = GetType().Name;
+            Name = name.Trim();
+            if (sendPipeOptions == null)
+                sendPipeOptions = PipeOptions.Default;
+            if (receivePipeOptions == null)
+                receivePipeOptions = PipeOptions.Default;
 
             Socket = socket;
             SocketConnectionOptions = socketConnectionOptions;
@@ -145,7 +145,7 @@ namespace NetGear.Core
 
         private static readonly Action<object> s_DoSendAsync = DoSendAsync;
         private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().FireAndForget();
-        
+
         public long TotalBytesSent => throw new NotImplementedException();
 
         public long TotalBytesReceived => throw new NotImplementedException();
@@ -283,7 +283,7 @@ namespace NetGear.Core
 
         #region Debug
         [Conditional("VERBOSE")]
-        private void DebugLog(string message, [CallerMemberName] string caller = null, 
+        private void DebugLog(string message, [CallerMemberName] string caller = null,
             [CallerLineNumber] int lineNumber = 0)
             => Common.Debugger.Log(Name, message, $"{caller}#{lineNumber}");
         #endregion
