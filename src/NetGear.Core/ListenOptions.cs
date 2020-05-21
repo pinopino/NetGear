@@ -4,7 +4,7 @@
 using System;
 using System.Net;
 
-namespace NetGear.Libuv
+namespace NetGear.Core
 {
     /// <summary>
     /// Describes either an <see cref="IPEndPoint"/>, Unix domain socket path, or a file descriptor for an already open
@@ -14,24 +14,23 @@ namespace NetGear.Libuv
     {
         private FileHandleType _handleType;
 
-        internal ListenOptions(IPEndPoint endPoint)
+        public ListenOptions(IPEndPoint endPoint)
         {
             Type = ListenType.IPEndPoint;
             IPEndPoint = endPoint;
         }
 
-        internal ListenOptions(string socketPath)
+        public ListenOptions(string socketPath)
         {
             Type = ListenType.SocketPath;
             SocketPath = socketPath;
         }
 
-        internal ListenOptions(ulong fileHandle)
+        public ListenOptions(ulong fileHandle)
             : this(fileHandle, FileHandleType.Auto)
-        {
-        }
+        { }
 
-        internal ListenOptions(ulong fileHandle, FileHandleType handleType)
+        public ListenOptions(ulong fileHandle, FileHandleType handleType)
         {
             Type = ListenType.FileHandle;
             FileHandle = fileHandle;

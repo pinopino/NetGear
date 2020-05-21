@@ -8,23 +8,23 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
-    public abstract class DuplexPipeServer : IDisposable
+    public abstract class DuplexPipeServer : IConnectionDispatcher, IDisposable
     {
         /// <summary>
         /// The state of a client connection
         /// </summary>
         protected readonly struct ClientConnection
         {
-            internal ClientConnection(IDuplexPipe transport, EndPoint remoteEndPoint)
+            internal ClientConnection(IDuplexPipe connection, EndPoint remoteEndPoint)
             {
-                Transport = transport;
+                Connection = connection;
                 RemoteEndPoint = remoteEndPoint;
             }
 
             /// <summary>
             /// The transport to use for this connection
             /// </summary>
-            public IDuplexPipe Transport { get; }
+            public IDuplexPipe Connection { get; }
 
             /// <summary>
             /// The remote endpoint that the client connected from
@@ -115,39 +115,27 @@ namespace NetGear.Core
             }
         }
 
-        private bool _disposed;
-        private PipeOptions _sendPipeOptions;
-        private PipeOptions _receivePipeOptions;
-        private readonly SocketListener _listener;
-        private readonly Action<object> RunClientAsync;
-
+        protected bool _disposed;
+        protected ITransport _transport;
+        private readonly Action<object> _runClientAsync;
         // value为客户端连接上来的时间戳，对于客户端来说服务端可以做很多事情。这里只是
         // 做了个示例，比如我们记录下时间戳如果同一个客户端多次上来又断掉可能就要小心了。
         private readonly ConcurrentDictionary<Client, long> _clients;
 
-        protected DuplexPipeServer(
-            int backlog = 20,
-            PipeOptions sendPipeOptions = null,
-            PipeOptions receivePipeOptions = null)
+        protected DuplexPipeServer()
         {
             _clients = new ConcurrentDictionary<Client, long>();
 
-            _listener = new SocketListener(backlog, sendPipeOptions, receivePipeOptions);
-            _listener.OnListenStarted += OnServerStarted;
-            _listener.OnListenFaulted += OnServerFaulted;
-            _listener.OnListenAccept += connection => RunClientAsync(
-                new ClientConnection(connection, connection.Socket.RemoteEndPoint));
-
-            RunClientAsync = async boxed =>
+            _runClientAsync = async boxed =>
             {
-                var connection = (ClientConnection)boxed;
-                var client = new Client(connection.Transport, connection.RemoteEndPoint, this);
+                var info = (ClientConnection)boxed;
+                var client = new Client(info.Connection, info.RemoteEndPoint, this);
                 AddClient(client);
 
                 try
                 {
                     OnClientConnected(client);
-                    await client.RunAsync().ConfigureAwait(false);
+                    await client.RunAsync();
                     try { client.Input.Complete(); } catch { }
                     try { client.Output.Complete(); } catch { }
                 }
@@ -159,27 +147,51 @@ namespace NetGear.Core
                 }
                 finally
                 {
-                    if (client.Transport is IDisposable d)
-                    {
-                        try { d.Dispose(); } catch { }
-                    }
+                    client.Dispose();
+                    OnClientDisconnected(client);
                     RemoveClient(client);
                 }
             };
         }
 
-        public void Start(IPEndPoint endPoint)
+        public virtual async Task StartAsync(IEndPointInformation endPoint)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
 
-            _listener.Start(endPoint);
+            _transport = new SocketTransport(endPoint, this, null);
+
+            await _transport.BindAsync();
+
+            OnServerStarted(endPoint);
+        }
+
+        public virtual void OnConnection(IDuplexPipe connection)
+        {
+            _runClientAsync(connection);
+        }
+
+        public virtual async Task StopAsync()
+        {
+            try
+            {
+                await _transport.UnbindAsync();
+            }
+            catch (Exception ex)
+            {
+                OnServerFaulted(ex);
+                throw;
+            }
+            finally
+            {
+                await _transport.StopAsync();
+            }
         }
 
         /// <summary>
         /// Invoked when the server starts
         /// </summary>
-        protected virtual void OnServerStarted(EndPoint endPoint)
+        protected virtual void OnServerStarted(IEndPointInformation endPoint)
         {
             Console.WriteLine($"服务端开始监听@{endPoint}");
         }

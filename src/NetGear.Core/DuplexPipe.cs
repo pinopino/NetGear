@@ -14,7 +14,6 @@ namespace NetGear.Core
 
         public PipeReader Input { get { return _pipe.Input; } }
         public PipeWriter Output { get { return _pipe.Output; } }
-        public IDuplexPipe Transport { get { return _pipe; } }
 
         // 说明：
         // DuplexPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；

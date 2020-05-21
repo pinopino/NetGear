@@ -3,17 +3,20 @@
 
 using System.Runtime.InteropServices;
 
-namespace NetGear.Libuv
+namespace NetGear.Core
 {
     public static class PlatformApis
     {
         static PlatformApis()
         {
             IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+            IsLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
             IsDarwin = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
         }
 
         public static bool IsWindows { get; }
+
+        public static bool IsLinux { get; }
 
         public static bool IsDarwin { get; }
     }

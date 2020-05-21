@@ -14,7 +14,7 @@ namespace ReverseServer
             // 开启server
             using (var server = new Server())
             {
-                server.Start(endPoint);
+                await server.StartAsync(new ListenOptions(endPoint));
 
                 string line;
                 while ((line = await Console.In.ReadLineAsync()) != null)

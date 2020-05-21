@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
+using NetGear.Core;
 using System;
 using System.Net;
-using System.Net.Security;
 using System.Threading.Tasks;
 
 namespace NetGear.Libuv
@@ -155,16 +155,13 @@ namespace NetGear.Libuv
                 }
 
                 var connection = new UvConnection(socket, Thread, remoteEndPoint, localEndPoint, log: Log);
-                OnClientConnected?.Invoke(connection, remoteEndPoint);
                 await connection.Start();
-
+                // TODO: dispatch connection
                 connection.Dispose();
-                OnClientDisconnected?.Invoke(remoteEndPoint);
             }
             catch (Exception ex)
             {
                 Log.LogCritical(ex, $"Unexpected exception in {nameof(UvListener)}.{nameof(HandleConnectionAsync)}.");
-                OnClientFaulted?.Invoke(remoteEndPoint, ex);
             }
         }
 
@@ -218,25 +215,5 @@ namespace NetGear.Libuv
             }
         }
         #endregion
-
-        public virtual async Task DisposeAsync()
-        {
-            // Ensure the event loop is still running.
-            // If the event loop isn't running and we try to wait on this Post
-            // to complete, then LibuvTransport will never be disposed and
-            // the exception that stopped the event loop will never be surfaced.
-            if (Thread.FatalError == null && ListenSocket != null)
-            {
-                await Thread.PostAsync(listener =>
-                {
-                    listener.ListenSocket.Dispose();
-
-                    listener._closed = true;
-
-                }, this).ConfigureAwait(false);
-            }
-
-            ListenSocket = null;
-        }
     }
 }

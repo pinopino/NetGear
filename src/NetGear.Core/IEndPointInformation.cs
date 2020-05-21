@@ -3,7 +3,7 @@
 
 using System.Net;
 
-namespace NetGear.Libuv
+namespace NetGear.Core
 {
     public interface IEndPointInformation
     {

@@ -1,15 +1,15 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-namespace NetGear.Libuv
+namespace NetGear.Core
 {
     /// <summary>
-    /// Enumerates the <see cref="IEndPointInformation.FileHandle"/> types.
+    /// Enumerates the <see cref="IEndPointInformation"/> types.
     /// </summary>
-    public enum FileHandleType
+    public enum ListenType
     {
-        Auto,
-        Tcp,
-        Pipe
+        IPEndPoint,
+        SocketPath,
+        FileHandle
     }
 }
