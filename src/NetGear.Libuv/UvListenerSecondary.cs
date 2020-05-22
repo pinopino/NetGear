@@ -23,6 +23,7 @@ namespace NetGear.Libuv
         private IntPtr _ptr;
         private Uv.uv_buf_t _buf;
         private UvThread _thread;
+        public IConnectionDispatcher Dispatcher { set; get; }
 
         public UvListenerSecondary(UvThread thread, ILibuvTrace log = null)
         {
@@ -215,6 +216,8 @@ namespace NetGear.Libuv
 
                 var connection = new UvConnection(socket, _thread, remoteEndPoint, localEndPoint, log: Log);
                 await connection.Start();
+
+                await Dispatcher.OnConnection(connection);
 
                 connection.Dispose();
             }

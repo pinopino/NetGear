@@ -7,9 +7,11 @@ namespace NetGear.Libuv
     public abstract class UvTcpServer : DuplexPipeServer
     {
         public ILibuvTrace Log { set; get; }
+        public int ThreadCount { set; get; }
 
-        protected UvTcpServer(ILibuvTrace log = null)
+        protected UvTcpServer(int threadCount = 1, ILibuvTrace log = null)
         {
+            ThreadCount = threadCount;
             Log = log;
         }
 
@@ -18,7 +20,7 @@ namespace NetGear.Libuv
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
 
-            _transport = new UvTransport(endPoint);
+            _transport = new UvTransport(endPoint, this, ThreadCount, Log);
 
             await _transport.BindAsync();
 

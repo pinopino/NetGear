@@ -65,6 +65,8 @@ namespace NetGear.Libuv
         {
             try
             {
+                // 说明：这里并没有像通常所认为的那样回调中串起一个while(true)，这是没有问题的，
+                // 其实是libuv本身的特性导致的，我们只需要驱动第一个read即可，而libuv负责之后的loop
                 StartReading();
 
                 Exception inputError = null;
@@ -74,7 +76,8 @@ namespace NetGear.Libuv
                 {
                     // This *must* happen after socket.ReadStart
                     // The socket output consumer is the only thing that can close the connection. If the
-                    // output pipe is already closed by the time we start then it's fine since, it'll close gracefully afterwards.
+                    // output pipe is already closed by the time we start then it's fine since, it'll 
+                    // close gracefully afterwards.
                     await WriteOutputAsync();
                 }
                 catch (UvException ex)

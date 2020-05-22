@@ -5,7 +5,7 @@ namespace NetGear.Core
 {
     public interface IConnectionDispatcher
     {
-        void OnConnection(IDuplexPipe connection);
+        Task OnConnection(IDuplexPipe connection);
 
         Task StopAsync();
     }

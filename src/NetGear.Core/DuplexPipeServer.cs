@@ -166,9 +166,10 @@ namespace NetGear.Core
             OnServerStarted(endPoint);
         }
 
-        public virtual void OnConnection(IDuplexPipe connection)
+        public virtual Task OnConnection(IDuplexPipe connection)
         {
             _runClientAsync(connection);
+            return Task.CompletedTask;
         }
 
         public virtual async Task StopAsync()

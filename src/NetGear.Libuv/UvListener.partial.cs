@@ -1,8 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using NetGear.Core;
 using System;
-using System.Net;
-using System.Threading.Tasks;
 
 namespace NetGear.Libuv
 {
@@ -129,39 +127,6 @@ namespace NetGear.Libuv
                     return AcceptHandle();
                 default:
                     throw new InvalidOperationException();
-            }
-        }
-
-        protected async Task HandleConnectionAsync(UvStreamHandle socket)
-        {
-            IPEndPoint remoteEndPoint = null;
-            IPEndPoint localEndPoint = null;
-
-            try
-            {
-                if (socket is UvTcpHandle tcpHandle)
-                {
-                    try
-                    {
-                        remoteEndPoint = tcpHandle.GetPeerIPEndPoint();
-                        localEndPoint = tcpHandle.GetSockIPEndPoint();
-                    }
-                    catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
-                    {
-                        Log.ConnectionReset("(null)");
-                        socket.Dispose();
-                        return;
-                    }
-                }
-
-                var connection = new UvConnection(socket, Thread, remoteEndPoint, localEndPoint, log: Log);
-                await connection.Start();
-                // TODO: dispatch connection
-                connection.Dispose();
-            }
-            catch (Exception ex)
-            {
-                Log.LogCritical(ex, $"Unexpected exception in {nameof(UvListener)}.{nameof(HandleConnectionAsync)}.");
             }
         }
 

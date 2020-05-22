@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using NetGear.Core;
 using System;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace NetGear.Libuv
@@ -12,6 +13,7 @@ namespace NetGear.Libuv
         public UvStreamHandle ListenSocket { set; get; }
         public ILibuvTrace Log { set; get; }
         public IEndPointInformation EndPointInformation { get; set; }
+        public IConnectionDispatcher Dispatcher { set; get; }
 
         public UvListener(UvThread thread, IEndPointInformation endpoint, ILibuvTrace log = null)
         {
@@ -32,7 +34,7 @@ namespace NetGear.Libuv
                 ListenSocket = CreateListenSocket();
                 ListenSocket.Listen(UvConstants.ListenBacklog, ConnectionCallback, this);
             }
-            catch (Exception ex)
+            catch
             {
                 ListenSocket?.Dispose();
                 throw;
@@ -74,6 +76,41 @@ namespace NetGear.Libuv
             // REVIEW: This task should be tracked by the server for graceful shutdown
             // Today it's handled specifically for http but not for aribitrary middleware
             _ = HandleConnectionAsync(socket);
+        }
+
+        protected async Task HandleConnectionAsync(UvStreamHandle socket)
+        {
+            IPEndPoint remoteEndPoint = null;
+            IPEndPoint localEndPoint = null;
+
+            try
+            {
+                if (socket is UvTcpHandle tcpHandle)
+                {
+                    try
+                    {
+                        remoteEndPoint = tcpHandle.GetPeerIPEndPoint();
+                        localEndPoint = tcpHandle.GetSockIPEndPoint();
+                    }
+                    catch (UvException ex) when (UvConstants.IsConnectionReset(ex.StatusCode))
+                    {
+                        Log.ConnectionReset("(null)");
+                        socket.Dispose();
+                        return;
+                    }
+                }
+
+                var connection = new UvConnection(socket, Thread, remoteEndPoint, localEndPoint, log: Log);
+                await connection.Start();
+
+                await Dispatcher.OnConnection(connection);
+
+                connection.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Log.LogCritical(ex, $"Unexpected exception in {nameof(UvListener)}.{nameof(HandleConnectionAsync)}.");
+            }
         }
 
         public virtual async Task DisposeAsync()

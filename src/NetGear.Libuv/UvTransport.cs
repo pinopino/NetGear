@@ -3,7 +3,6 @@ using NetGear.Core;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace NetGear.Libuv
@@ -15,10 +14,12 @@ namespace NetGear.Libuv
         public List<UvThread> Threads { get; }
         private readonly List<IAsyncDisposable> _listeners;
         private readonly IEndPointInformation _endPointInformation;
+        private readonly IConnectionDispatcher _dispatcher;
 
-        public UvTransport(IEndPointInformation endPoint, int threadCount = 1, ILibuvTrace log = null)
+        public UvTransport(IEndPointInformation endPoint, IConnectionDispatcher dispatcher, int threadCount = 1, ILibuvTrace log = null)
         {
             _endPointInformation = endPoint;
+            _dispatcher = dispatcher;
             _threadCount = threadCount;
             Log = log;
             Threads = new List<UvThread>();
@@ -45,6 +46,7 @@ namespace NetGear.Libuv
                 if (_threadCount == 1)
                 {
                     var listener = new UvListener(Threads[0], _endPointInformation, Log);
+                    listener.Dispatcher = _dispatcher;
                     _listeners.Add(listener);
                     await listener.StartAsync().ConfigureAwait(false);
                 }
@@ -54,12 +56,14 @@ namespace NetGear.Libuv
                     var pipeMessage = Guid.NewGuid().ToByteArray();
 
                     var listenerPrimary = new UvListenerPrimary(Threads[0], _endPointInformation, Log);
+                    listenerPrimary.Dispatcher = _dispatcher;
                     _listeners.Add(listenerPrimary);
                     await listenerPrimary.StartAsync(pipeName, pipeMessage).ConfigureAwait(false);
 
                     foreach (var thread in Threads.Skip(1))
                     {
                         var listenerSecondary = new UvListenerSecondary(thread, Log);
+                        listenerSecondary.Dispatcher = _dispatcher;
                         _listeners.Add(listenerSecondary);
                         await listenerSecondary.StartAsync(pipeName, pipeMessage).ConfigureAwait(false);
                     }
