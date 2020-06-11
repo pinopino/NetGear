@@ -83,6 +83,7 @@ namespace NetGear.Core
                         messageId = 0; // treat as Broadcast
                     }
                 }
+
                 if (tcs != null)
                 {
                     // TrySetResult可能会返回false此时lease是没有设置上去的

@@ -12,8 +12,8 @@ namespace NetGear.Core
         private IDuplexPipe _pipe;
         private readonly SemaphoreSlim _singleWriter = new SemaphoreSlim(1);
 
-        public PipeReader Input { get { return _pipe.Input; } }
-        public PipeWriter Output { get { return _pipe.Output; } }
+        internal PipeReader Input { get { return _pipe.Input; } }
+        internal PipeWriter Output { get { return _pipe.Output; } }
 
         // 说明：
         // DuplexPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；
@@ -36,7 +36,10 @@ namespace NetGear.Core
                 var makingProgress = false;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    var readResult = await reader.ReadAsync(cancellationToken);
+                    // makingProgress为false时直接短路，妙
+                    if (!(makingProgress && reader.TryRead(out var readResult)))
+                        readResult = await reader.ReadAsync(cancellationToken);
+
                     if (readResult.IsCanceled)
                         break;
 
@@ -102,12 +105,13 @@ namespace NetGear.Core
                     return default;
 
                 var final = AwaitPending(memory, writeResult);
-                memory = null; // prevent dispose
+                memory = null; // prevent dispose 阻止正常情况下finally中的dispose，交由AwaitPending中的using自己去搞
                 return final;
             }
             finally
             {
-                memory?.Dispose();
+                if (memory != null)
+                    try { memory.Dispose(); } catch { }
             }
         }
 

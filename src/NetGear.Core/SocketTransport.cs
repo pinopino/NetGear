@@ -53,6 +53,12 @@ namespace NetGear.Core
 
             EnableRebinding(listenSocket);
 
+            // Kestrel expects IPv6Any to bind to both IPv6 and IPv4
+            if (endPoint.Address == IPAddress.IPv6Any)
+            {
+                listenSocket.DualMode = true;
+            }
+
             try
             {
                 listenSocket.Bind(endPoint);
@@ -70,9 +76,7 @@ namespace NetGear.Core
 
             listenSocket.Listen(_backlog);
             _listener = listenSocket;
-
-            Scheduler(_receivePipeOptions?.ReaderScheduler,
-                state => state = ListenForConnectionsAsync(), _listenTask);
+            _listenTask = Task.Run(() => ListenForConnectionsAsync());
 
             return Task.CompletedTask;
         }
@@ -104,8 +108,9 @@ namespace NetGear.Core
                 }
                 else
                 {
-                    _trace.LogCritical(ex, $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.");
-                    _listenException = ex;
+                    var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
+                    _trace.LogCritical(ex, mark);
+                    _listenException = new ListenLoopException(mark, ex);
 
                     // Request shutdown so we can rethrow this exception
                     // in Stop which should be observable.

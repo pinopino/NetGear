@@ -108,23 +108,28 @@ namespace NetGear.Core
                 }
                 finally
                 {
-                    msg?.Dispose();
+                    if (msg != null)
+                        try { msg.Dispose(); } catch { }
                 }
 
                 return default;
             }
         }
 
+        private int _stopping;
+        private bool _hasStarted;
         protected bool _disposed;
         protected ITransport _transport;
         private readonly Action<object> _runClientAsync;
         // value为客户端连接上来的时间戳，对于客户端来说服务端可以做很多事情。这里只是
         // 做了个示例，比如我们记录下时间戳如果同一个客户端多次上来又断掉可能就要小心了。
         private readonly ConcurrentDictionary<Client, long> _clients;
+        private readonly TaskCompletionSource<object> _stoppedTcs;
 
         protected DuplexPipeServer()
         {
             _clients = new ConcurrentDictionary<Client, long>();
+            _stoppedTcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             _runClientAsync = async boxed =>
             {
@@ -148,8 +153,8 @@ namespace NetGear.Core
                 finally
                 {
                     client.Dispose();
-                    OnClientDisconnected(client);
                     RemoveClient(client);
+                    OnClientDisconnected(client);
                 }
             };
         }
@@ -159,34 +164,48 @@ namespace NetGear.Core
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
 
+            if (_hasStarted)
+                throw new InvalidOperationException("server has already started");
+            _hasStarted = true;
+
             _transport = new SocketTransport(endPoint, this, null);
 
-            await _transport.BindAsync();
+            await _transport.BindAsync().ConfigureAwait(false);
 
             OnServerStarted(endPoint);
+        }
+
+        public virtual async Task StopAsync()
+        {
+            if (Interlocked.Exchange(ref _stopping, 1) == 1)
+            {
+                await _stoppedTcs.Task.ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                await _transport.UnbindAsync();
+                await _transport.StopAsync();
+            }
+            catch (ListenLoopException ex)
+            {
+                OnServerFaulted(ex.InnerException);
+                _stoppedTcs.TrySetException(ex);
+            }
+            catch (Exception ex)
+            {
+                _stoppedTcs.TrySetException(ex);
+                throw;
+            }
+
+            _stoppedTcs.TrySetResult(null);
         }
 
         public virtual Task OnConnection(IDuplexPipe connection)
         {
             _runClientAsync(connection);
             return Task.CompletedTask;
-        }
-
-        public virtual async Task StopAsync()
-        {
-            try
-            {
-                await _transport.UnbindAsync();
-            }
-            catch (Exception ex)
-            {
-                OnServerFaulted(ex);
-                throw;
-            }
-            finally
-            {
-                await _transport.StopAsync();
-            }
         }
 
         /// <summary>
