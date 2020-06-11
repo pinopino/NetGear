@@ -7,6 +7,8 @@ namespace NetGear.Core
 {
     public interface IEndPointInformation
     {
+        TransportType Transport { get; }
+
         /// <summary>
         /// The type of interface being described: either an <see cref="IPEndPoint"/>, Unix domain socket path, or a file descriptor.
         /// </summary>

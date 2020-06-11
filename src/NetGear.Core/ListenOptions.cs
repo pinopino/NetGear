@@ -46,6 +46,8 @@ namespace NetGear.Core
             }
         }
 
+        public TransportType Transport { get { throw new NotImplementedException(); } }
+
         /// <summary>
         /// The type of interface being described: either an <see cref="IPEndPoint"/>, Unix domain socket path, or a file descriptor.
         /// </summary>

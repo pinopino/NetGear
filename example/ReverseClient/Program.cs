@@ -14,7 +14,7 @@ namespace ReverseClient
             var endPoint = new IPEndPoint(IPAddress.Loopback, 5000);
 
             // 开启client
-            using (var client = await DuplexPipeClient.ConnectAsync(endPoint))
+            using (var client = await DuplexPipeClient.ConnectAsync(new ListenOptions(endPoint)))
             {
                 // subscribe to broadcasts
                 client.Broadcast += async msg =>

@@ -52,7 +52,7 @@ namespace NetGear.Libuv
                 }
                 else
                 {
-                    var pipeName = (PlatformApis.IsWindows ? @"\\.\pipe\kestrel_" : "/tmp/kestrel_") + Guid.NewGuid().ToString("n");
+                    var pipeName = (PlatformApis.IsWindows ? @"\\.\pipe\netgear_kestrel_" : "/tmp/netgear_kestrel_") + Guid.NewGuid().ToString("n");
                     var pipeMessage = Guid.NewGuid().ToByteArray();
 
                     var listenerPrimary = new UvListenerPrimary(Threads[0], _endPointInformation, Log);

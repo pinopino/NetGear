@@ -22,8 +22,6 @@ namespace NetGear.Core
         /// </summary>
         public long BytesRead => Interlocked.Read(ref _totalBytesReceived);
 
-        long IMeasuredDuplexPipe.TotalBytesReceived => BytesRead;
-
         /// <summary>
         /// The number of bytes received in the last read
         /// </summary>
@@ -46,8 +44,7 @@ namespace NetGear.Core
 
                         CounterHelper.Incr(Counter.OpenReceiveReadAsync);
                         DoReceive(Socket, _readerArgs, default, Name);
-                        CounterHelper.Incr(_readerArgs.IsCompleted ?
-                            Counter.SocketZeroLengthReceiveSync : Counter.SocketZeroLengthReceiveAsync);
+                        CounterHelper.Incr(_readerArgs.IsCompleted ? Counter.SocketZeroLengthReceiveSync : Counter.SocketZeroLengthReceiveAsync);
                         await _readerArgs;
                         CounterHelper.Decr(Counter.OpenReceiveReadAsync);
                         DebugLog($"zero-length receive complete; now {Socket.Available} bytes available");
@@ -65,8 +62,7 @@ namespace NetGear.Core
                         CounterHelper.Incr(Counter.OpenReceiveReadAsync);
 
                         DoReceive(Socket, _readerArgs, buffer, Name);
-                        CounterHelper.Incr(_readerArgs.IsCompleted ?
-                            Counter.SocketReceiveSync : Counter.SocketReceiveAsync);
+                        CounterHelper.Incr(_readerArgs.IsCompleted ? Counter.SocketReceiveSync : Counter.SocketReceiveAsync);
                         DebugLog(_readerArgs.IsCompleted ? "receive is sync" : "receive is async");
                         var bytesReceived = await _readerArgs;
                         LastReceived = bytesReceived;
@@ -103,7 +99,7 @@ namespace NetGear.Core
                     }
                     else
                     {
-                        // 说明：关于归一线程，参考SocketConnection.Send第45行解释
+                        // 说明：关于归一线程，参考SocketConnection.Send中DoSendAsync上的注释
                         result = await flushTask;
                         DebugLog("pipe flushed (async)");
                     }
@@ -171,9 +167,10 @@ namespace NetGear.Core
             {
                 if (_receiveAborted)
                 {
-                    if (error == null)
-                        error = new ConnectionAbortedException();
+                    error = error ?? _abortReason ?? new ConnectionAbortedException();
                 }
+
+                _receiveAborted = true;
                 try
                 {
                     DebugLog($"shutting down socket-receive");
@@ -220,7 +217,7 @@ namespace NetGear.Core
             }
             Common.Debugger.Log(name, $"## {nameof(socket.ReceiveAsync)} <={buffer.Length}");
 
-            if (!socket.ReceiveAsync(args)) 
+            if (!socket.ReceiveAsync(args))
                 args.Complete();
         }
     }

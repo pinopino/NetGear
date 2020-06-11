@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
-    public sealed partial class SocketConnection : IMeasuredDuplexPipe, IDisposable
+    public sealed partial class SocketConnection : TransportConnection, IDuplexPipe, IDisposable
     {
         private sealed class WrappedReader : PipeReader
         {
@@ -98,8 +98,11 @@ namespace NetGear.Core
         private readonly PipeReader _input;
         private readonly PipeWriter _output;
         private static List<ArraySegment<byte>> _spareBuffer;
+        private volatile ConnectionAbortedException _abortReason;
 
         private string Name { get; }
+
+        private ISocketsTrace Log { get; }
 
         /// <summary>
         /// The underlying socket for this connection
@@ -146,13 +149,9 @@ namespace NetGear.Core
         private static readonly Action<object> s_DoSendAsync = DoSendAsync;
         private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().FireAndForget();
 
-        public long TotalBytesSent => throw new NotImplementedException();
+        public override PipeReader Input => this._input;
 
-        public long TotalBytesReceived => throw new NotImplementedException();
-
-        public PipeReader Input => this._input;
-
-        public PipeWriter Output => this._output;
+        public override PipeWriter Output => this._output;
 
         /// <summary>
         /// Create a SocketConnection instance over an existing socket
@@ -170,6 +169,40 @@ namespace NetGear.Core
             SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
         {
             return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name);
+        }
+
+        public override void Abort(ConnectionAbortedException abortReason)
+        {
+            _abortReason = abortReason;
+            Input.CancelPendingRead();
+
+            // Try to gracefully close the socket to match libuv behavior.
+            if (!_receiveAborted)
+            {
+                try
+                {
+                    Socket.Shutdown(SocketShutdown.Receive);
+                    TrySetShutdown(_abortReason, this, PipeShutdownKind.InputWriterCompleted);
+                }
+                catch { }
+            }
+
+            if (!_sendAborted)
+            {
+                try
+                {
+                    Socket.Shutdown(SocketShutdown.Send);
+                    TrySetShutdown(_abortReason, this, PipeShutdownKind.OutputReaderCompleted);
+                }
+                catch { }
+            }
+
+            try
+            {
+                Socket.Close();
+                Socket.Dispose();
+            }
+            catch { }
         }
 
         private void InputReaderCompleted(Exception ex)
@@ -215,9 +248,6 @@ namespace NetGear.Core
         /// </summary>
         public SocketError SocketError { get; private set; }
 
-        private bool TrySetShutdown(PipeShutdownKind kind) => kind != PipeShutdownKind.None
-           && Interlocked.CompareExchange(ref _socketShutdownKind, (int)kind, 0) == 0;
-
         private bool TrySetShutdown(Exception ex, SocketConnection connection, PipeShutdownKind kind)
         {
             try
@@ -254,6 +284,9 @@ namespace NetGear.Core
             if (win) SocketError = socketError;
             return win;
         }
+
+        private bool TrySetShutdown(PipeShutdownKind kind) => kind != PipeShutdownKind.None
+           && Interlocked.CompareExchange(ref _socketShutdownKind, (int)kind, 0) == 0;
 
         /// <summary>
         /// Set recommended socket options for client sockets

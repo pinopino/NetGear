@@ -21,8 +21,6 @@ namespace NetGear.Core
         /// </summary>
         public long BytesSent => Interlocked.Read(ref _totalBytesSent);
 
-        long IMeasuredDuplexPipe.TotalBytesSent => BytesSent;
-
         private async Task DoSendAsync()
         {
             Exception error = null;
@@ -64,10 +62,10 @@ namespace NetGear.Core
                         {
                             // 说明：send方向上是read from pipe and send to socket，所以这里回调应该是
                             // 执行在ReaderScheduler上
-                            if (_writerArgs == null) 
-                                _writerArgs = new SocketAwaitableEventArgs(InlineWrites ? 
+                            if (_writerArgs == null)
+                                _writerArgs = new SocketAwaitableEventArgs(InlineWrites ?
                                     null : _sendOptions.ReaderScheduler);
-                            
+
                             DebugLog($"sending {buffer.Length} bytes over socket...");
                             CounterHelper.Incr(Counter.OpenSendWriteAsync);
                             DoSend(Socket, _writerArgs, buffer, Name);
@@ -121,6 +119,11 @@ namespace NetGear.Core
             }
             finally
             {
+                if (_sendAborted)
+                {
+                    error = error ?? _abortReason;
+                }
+
                 // Make sure to close the connection only after the _aborted flag is set.
                 // Without this, the RequestsCanBeAbortedMidRead test will sometimes fail when
                 // a BadHttpRequestException is thrown instead of a TaskCanceledException.
