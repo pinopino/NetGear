@@ -1,6 +1,6 @@
 ﻿using System.IO.Pipelines;
 
-namespace NetGear.Core
+namespace NetGear.Pipelines
 {
     /// <summary>
     /// A duplex pipe that measures the bytes sent/received

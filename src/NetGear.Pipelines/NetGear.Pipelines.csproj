@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Pipelines" Version="4.7.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NetGear.Core\NetGear.Core.csproj" />
+    <ProjectReference Include="..\NetGear.Libuv\NetGear.Libuv.csproj" />
+  </ItemGroup>
+
+</Project>

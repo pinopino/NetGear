@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NetGear.Core;
+using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
@@ -6,7 +7,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NetGear.Core
+namespace NetGear.Pipelines
 {
     public abstract class DuplexPipeServer : IConnectionDispatcher, IDisposable
     {

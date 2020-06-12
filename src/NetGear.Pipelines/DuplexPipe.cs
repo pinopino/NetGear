@@ -5,7 +5,7 @@ using System.IO.Pipelines;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NetGear.Core
+namespace NetGear.Pipelines
 {
     public abstract class DuplexPipe : IDisposable
     {

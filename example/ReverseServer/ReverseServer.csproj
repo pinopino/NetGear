@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NetGear.Core\NetGear.Core.csproj" />
+    <ProjectReference Include="..\..\src\NetGear.Pipelines\NetGear.Pipelines.csproj" />
   </ItemGroup>
 
 </Project>

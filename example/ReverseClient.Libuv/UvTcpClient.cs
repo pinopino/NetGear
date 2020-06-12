@@ -1,4 +1,6 @@
-﻿using NetGear.Core.Common;
+﻿using NetGear.Core;
+using NetGear.Core.Common;
+using NetGear.Pipelines;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -6,37 +8,45 @@ using System.IO.Pipelines;
 using System.Net;
 using System.Threading.Tasks;
 
-namespace NetGear.Core
+namespace NetGear.Libuv
 {
-    public class DuplexPipeClient : DuplexPipe
+    public class UvTcpClient : DuplexPipe
     {
         private int _nextMessageId;
         private Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>> _awaitingResponses;
 
+        private static readonly Action<UvConnectRequest, int, Exception, object> _connectCallback = ConnectCallback;
+        private static readonly Action<object> _startConnect = state => ((UvTcpClient)state).DoConnect();
+
+        private readonly TaskCompletionSource<UvTcpClient> _connectTcs;
+        private readonly IPEndPoint _ipEndPoint;
+        private readonly UvThread _thread;
+        private UvTcpHandle _connectSocket;
+        private Action<UvTcpClient> _onConnect;
+
+        public ILibuvTrace Log { set; get; }
         public event Action<IMemoryOwner<byte>> Broadcast;
 
-        private DuplexPipeClient(IDuplexPipe pipe)
+        private UvTcpClient(IDuplexPipe pipe, ILibuvTrace log)
             : base(pipe)
         {
-            _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();
-            StartReceiveLoopAsync().FireAndForget();
+            Log = log;
+            _thread = new UvThread(Log);
+            _connectTcs = new TaskCompletionSource<UvTcpClient>();
         }
 
-        public static async Task<DuplexPipeClient> ConnectAsync(IEndPointInformation endPoint)
+        public async Task<UvTcpClient> ConnectAsync(IPEndPoint endPoint)
         {
+            _thread.Post(_startConnect, this);
 
-            if (endPoint.Transport == TransportType.Socket)
-            {
-                var socketConnection = await SocketConnection.ConnectAsync(endPoint.IPEndPoint,
-                    onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
-                return new DuplexPipeClient(socketConnection);
-            }
-            else if (endPoint.Transport == TransportType.Libuv)
-            {
-                //TODO：已经卡住了，需要继续拆分依赖关系不然这里写不下去的
-            }
+            var connection = await _connectTcs.Task;
 
-            return null;
+            // Get back onto the current context
+            await Task.Yield();
+
+            StartReceiveLoopAsync().FireAndForget();
+
+            return connection;
         }
 
         public ValueTask SendAsync(ReadOnlyMemory<byte> message) => WriteAsync(message, 0);
@@ -90,20 +100,14 @@ namespace NetGear.Core
                     else
                     {
                         tcs = null;
-                        messageId = 0; // treat as Broadcast
+                        messageId = 0;
                     }
                 }
-
                 if (tcs != null)
                 {
-                    // TrySetResult可能会返回false此时lease是没有设置上去的
-                    // 我们需要自己手动释放掉已经借出的lease
                     IMemoryOwner<byte> lease = null;
                     try
-                    {   // only if we successfully hand it over
-                        // to the TCS is it considered "not our
-                        // problem anymore" - otherwise: we need
-                        // to dispose
+                    {
                         lease = payload.Lease();
                         if (tcs.TrySetResult(lease))
                             lease = null;
@@ -123,6 +127,22 @@ namespace NetGear.Core
             }
 
             return default;
+        }
+
+        private void DoConnect()
+        {
+            _connectSocket = new UvTcpHandle(Log);
+            _connectSocket.Init(_thread.Loop, null);
+
+            var clientConnectionPipe = new UvPipeHandle(Log);
+            var connectReq = new UvConnectRequest(Log);
+            connectReq.Init(_thread);
+            connectReq.Connect(clientConnectionPipe, "name", _connectCallback, this);
+        }
+
+        private static void ConnectCallback(UvConnectRequest req, int status, Exception exception, object state)
+        {
+            throw new NotImplementedException();
         }
     }
 }
