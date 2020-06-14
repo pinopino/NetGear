@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.Logging;
 using System;
+using System.Net;
 
 namespace NetGear.Libuv
 {
@@ -32,6 +33,34 @@ namespace NetGear.Libuv
                 loop.Libuv,
                 loop.ThreadId,
                 requestSize);
+        }
+
+        public void Connect(
+            UvTcpHandle socket,
+            IPEndPoint endpoint,
+            Action<UvConnectRequest, int, UvException, object> callback,
+            object state)
+        {
+            _callback = callback;
+            _state = state;
+
+            SockAddr addr;
+            var addressText = endpoint.Address.ToString();
+
+            UvException error1;
+            _uv.ip4_addr(addressText, endpoint.Port, out addr, out error1);
+
+            if (error1 != null)
+            {
+                UvException error2;
+                _uv.ip6_addr(addressText, endpoint.Port, out addr, out error2);
+                if (error2 != null)
+                {
+                    throw error1;
+                }
+            }
+
+            Libuv.tcp_connect(this, socket, ref addr, _uv_connect_cb);
         }
 
         public void Connect(

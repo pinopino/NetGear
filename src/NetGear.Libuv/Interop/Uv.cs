@@ -200,6 +200,18 @@ namespace NetGear.Libuv
             ThrowIfErrored(_uv_tcp_bind(handle, ref addr, flags));
         }
 
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void uv_connect_cb(IntPtr req, int status);
+
+        protected delegate void tcp_connect_func(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb);
+        protected tcp_connect_func _uv_tcp_connect;
+        public void tcp_connect(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb)
+        {
+            req.Validate();
+            handle.Validate();
+            _uv_tcp_connect(req, handle, ref addr, cb);
+        }
+
         protected Func<UvTcpHandle, IntPtr, int> _uv_tcp_open;
         public void tcp_open(UvTcpHandle handle, IntPtr hSocket)
         {
@@ -253,8 +265,6 @@ namespace NetGear.Libuv
             ThrowIfErrored(_uv_accept(server, client));
         }
 
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate void uv_connect_cb(IntPtr req, int status);
         protected Action<UvConnectRequest, UvPipeHandle, string, uv_connect_cb> _uv_pipe_connect;
         public void pipe_connect(UvConnectRequest req, UvPipeHandle handle, string name, uv_connect_cb cb)
         {
@@ -534,6 +544,9 @@ namespace NetGear.Libuv
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_tcp_nodelay(UvTcpHandle handle, int enable);
+
+            [DllImport("libuv", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+            public static extern void uv_tcp_connect(UvConnectRequest req, UvTcpHandle handle, ref SockAddr addr, uv_connect_cb cb);
 
             [DllImport("libuv", CallingConvention = CallingConvention.Cdecl)]
             public static extern int uv_pipe_init(UvLoopHandle loop, UvPipeHandle handle, int ipc);

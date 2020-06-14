@@ -27,6 +27,17 @@ namespace NetGear.Pipelines
             _pipe = pipe;
         }
 
+        protected DuplexPipe()
+        { }
+
+        protected void SetPipe(IDuplexPipe pipe)
+        {
+            if (pipe == null)
+                throw new ArgumentNullException(nameof(pipe));
+
+            _pipe = pipe;
+        }
+
         #region 读方法
         protected async Task StartReceiveLoopAsync(CancellationToken cancellationToken = default)
         {

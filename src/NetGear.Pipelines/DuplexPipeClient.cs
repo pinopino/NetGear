@@ -24,18 +24,9 @@ namespace NetGear.Pipelines
 
         public static async Task<DuplexPipeClient> ConnectAsync(IEndPointInformation endPoint)
         {
-            if (endPoint.Transport == TransportType.Socket)
-            {
-                var socketConnection = await SocketConnection.ConnectAsync(endPoint.IPEndPoint,
-                    onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
-                return new DuplexPipeClient(socketConnection);
-            }
-            else if (endPoint.Transport == TransportType.Libuv)
-            {
-                //TODO：已经卡住了，需要继续拆分依赖关系不然这里写不下去的
-            }
-
-            return null;
+            var socketConnection = await SocketConnection.ConnectAsync(endPoint.IPEndPoint,
+                onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
+            return new DuplexPipeClient(socketConnection);
         }
 
         public ValueTask SendAsync(ReadOnlyMemory<byte> message) => WriteAsync(message, 0);
