@@ -103,11 +103,9 @@ namespace NetGear.Libuv
                 {
                     _uv = new Uv();
                     _loop.Init(_uv);
-                    // 任何其他线程通过_postHandle.send调用都会触发这里onpost回调被执行
-                    // 相当于通知当前线程有活干了
                     _post.Init(_loop, OnPost, EnqueueCloseHandle);
                     _initCompleted = true;
-                    startTcs.SetResult(0); // init/start完毕
+                    startTcs.SetResult(0);
                 }
                 catch (Exception ex)
                 {
@@ -133,9 +131,6 @@ namespace NetGear.Libuv
                 // Calling ReadStop makes the handle as in-active which means the loop can
                 // end while there's still valid handles around. This makes loop.Dispose throw
                 // with an EBUSY. To avoid that, we walk all of the handles and dispose them.
-                // 说明：简单说就是handle（这里就是loophandle也就是我们的这个事件循环）可能会被临时置为
-                // in-active这会导致挂在其上的正常的handle没法跑，所以这里手动walk一次所有的handle手动
-                // 全部跑一次
                 Walk(ptr =>
                 {
                     var handle = UvMemory.FromIntPtr<UvHandle>(ptr);

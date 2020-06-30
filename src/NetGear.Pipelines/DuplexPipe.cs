@@ -15,10 +15,6 @@ namespace NetGear.Pipelines
         internal PipeReader Input { get { return _pipe.Input; } }
         internal PipeWriter Output { get { return _pipe.Output; } }
 
-        // 说明：
-        // DuplexPipeline的下层驱动或者说Transport就是这里的IDuplexPipe；
-        // 同时DuplexPipeline自己也是一个驱动（含有更多业务上的味道）由它负责驱动下层的pipe读写。
-        // 这主要就体现在StartReceiveLoopAsync和WriteAsync两个方法上
         protected DuplexPipe(IDuplexPipe pipe)
         {
             if (pipe == null)
@@ -47,7 +43,6 @@ namespace NetGear.Pipelines
                 var makingProgress = false;
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    // makingProgress为false时直接短路，妙
                     if (!(makingProgress && reader.TryRead(out var readResult)))
                         readResult = await reader.ReadAsync(cancellationToken);
 
@@ -62,10 +57,6 @@ namespace NetGear.Pipelines
                     while (TryParseFrame(ref buffer, out var payload, out var messageId))
                     {
                         makingProgress = true;
-                        // 说明：
-                        // OnReceiveAsync里面会有一次lease动作，表明我们不想让处理bytes的业务影响到
-                        // pipe里面的内存管理；但是下面紧接着的_reader.AdvanceTo又表明是业务处理完毕
-                        // 了bytes之后内存才被释放，如此是不是没起到应有的效果？
                         await OnReceiveAsync(payload, messageId);
                     }
                     // record that we comsumed up to the (now updated) buffer.Start,
@@ -92,15 +83,6 @@ namespace NetGear.Pipelines
         #region 写方法
         protected ValueTask WriteAsync(IMemoryOwner<byte> memory, int messageId)
         {
-            // 说明：
-            // 很不幸这里memory会在WriteAsync异步完成之前就被dispose掉
-            // 于是写法需要变成下面那种丑陋的样子
-            // link：https://stackoverflow.com/questions/18849825/async-await-and-the-idisposable-interface
-            //using (memory)
-            //{
-            //    return WriteAsync(memory.Memory, messageId);
-            //}
-
             async ValueTask AwaitPending(IMemoryOwner<byte> mmemory, ValueTask write)
             {
                 using (mmemory)
@@ -116,7 +98,7 @@ namespace NetGear.Pipelines
                     return default;
 
                 var final = AwaitPending(memory, writeResult);
-                memory = null; // prevent dispose 阻止正常情况下finally中的dispose，交由AwaitPending中的using自己去搞
+                memory = null;
                 return final;
             }
             finally

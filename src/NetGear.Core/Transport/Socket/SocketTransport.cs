@@ -146,7 +146,6 @@ namespace NetGear.Core
 
         public Task StopAsync()
         {
-            // 说明：不需要啥操作，我们直接返回好了
             return Task.CompletedTask;
         }
 

@@ -56,10 +56,7 @@ namespace NetGear.Libuv
                 Marshal.StructureToPtr(fileCompletionInfo, _fileCompletionInfoPtr, false);
             }
 
-            // 说明：
-            // 这里我只能假设监听开始后客户端都还没有连接上来，
             await StartAsync().ConfigureAwait(false);
-            // 此时赶紧把管道抽起来，有几个secondary listener就创建几个管道
             await Thread.PostAsync(listener => listener.PostCallback(), this).ConfigureAwait(false);
         }
 
@@ -79,7 +76,6 @@ namespace NetGear.Libuv
                 return;
             }
 
-            // 说明：secondary pipe连接上来
             var dispatchPipe = new UvPipeHandle(Log);
             // Add to the list of created pipes for disposal tracking
             _createdPipes.Add(dispatchPipe);
@@ -89,9 +85,6 @@ namespace NetGear.Libuv
                 dispatchPipe.Init(Thread.Loop, Thread.QueueCloseHandle, true);
                 pipe.Accept(dispatchPipe);
 
-                // 说明：
-                // 相当于跟那几个secondary pipe约定好的协议，如果遵守了说明是kestrel的管道，
-                // 那么随后就可以派发conn到管道对端去，否则不做任何操作。
                 // Ensure client sends "Kestrel" before adding pipe to _dispatchPipes.
                 var readContext = new PipeReadContext(this);
                 dispatchPipe.ReadStart(

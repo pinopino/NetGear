@@ -119,8 +119,6 @@ namespace NetGear.Pipelines
 
                 if (tcs != null)
                 {
-                    // TrySetResult可能会返回false此时lease是没有设置上去的
-                    // 我们需要自己手动释放掉已经借出的lease
                     IMemoryOwner<byte> lease = null;
                     try
                     {   // only if we successfully hand it over

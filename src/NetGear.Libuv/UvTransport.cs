@@ -83,7 +83,6 @@ namespace NetGear.Libuv
 
         public async Task UnbindAsync()
         {
-            // 说明：unbind时清理掉listener资源，threads没有动，可以支持rebind
             var disposeTasks = _listeners.Select(listener => listener.DisposeAsync()).ToArray();
 
             if (!await WaitAsync(Task.WhenAll(disposeTasks), TimeSpan.FromSeconds(5)).ConfigureAwait(false))

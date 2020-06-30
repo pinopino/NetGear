@@ -52,7 +52,6 @@ namespace NetGear.Libuv
             {
                 Log.ConnectionRead(ConnectionId, status);
 
-                // 说明：这里马上就调用flush了，实际可以压缩几次advance再批量flush
                 _receiveFromUV.Writer.Advance(status);
                 var flushTask = _receiveFromUV.Writer.FlushAsync();
 
@@ -66,7 +65,7 @@ namespace NetGear.Libuv
             else
             {
                 // Given a negative status, it's possible that OnAlloc wasn't called.
-                _socket.ReadStop(); // 说明：先停下来
+                _socket.ReadStop();
 
                 Exception error = null;
 
@@ -81,7 +80,6 @@ namespace NetGear.Libuv
                 }
 
                 // Complete after aborting the connection
-                // 标记写入端完成
                 _receiveFromUV.Writer.Complete(error);
             }
         }
@@ -89,11 +87,10 @@ namespace NetGear.Libuv
         private async Task ApplyBackpressureAsync(ValueTask<FlushResult> flushTask)
         {
             Log.ConnectionPause(ConnectionId);
-            _socket.ReadStop(); // 说明：先停下来
+            _socket.ReadStop();
 
-            var result = await flushTask; // 开始等待flush
+            var result = await flushTask;
 
-            // 再次起来的时候得先看看reader是不是已经结束或者cancel了
             // If the reader isn't complete or cancelled then resume reading
             if (!result.IsCompleted && !result.IsCanceled)
             {

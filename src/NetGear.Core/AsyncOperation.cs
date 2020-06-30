@@ -9,8 +9,6 @@ using System.Threading.Tasks.Sources;
 
 namespace NetGear.Core
 {
-    // 说明：摘抄自System.Threading.Channels
-    // 简单说来就是手动又实现了一个TaskCompletionSource
     public abstract class AsyncOperation
     {
         /// <summary>Sentinel object used in a field to indicate the operation is available for use.</summary>
@@ -56,8 +54,6 @@ namespace NetGear.Core
         /// If the operation is cancelable, then it can't be pooled.  And if it's poolable, there must never be race conditions to complete it,
         /// which is the main reason poolable objects can't be cancelable, as then cancellation could fire, the object could get reused,
         /// and then we may end up trying to complete an object that's used by someone else.
-        /// 说明：简单的说，池化的时候该令牌对象“生命周期”必须要已经结束才行，不然如果是异步操作中途pending的状态返回池中就gg了。
-        /// 由此，池化可以请走完“生命周期”；不池化也可以，此时还可以支持cancel
         /// </remarks>
         private readonly bool _pooled;
         /// <summary>Whether continuations should be forced to run asynchronously.</summary>
@@ -152,9 +148,6 @@ namespace NetGear.Core
         /// to completed and could end up calling GetResult in an incomplete state.  And if we
         /// only considered the continuation, then we have issues if OnCompleted is used before
         /// the operation completes, as the continuation will be 
-        /// 说明：注意到这里asyncop对象虽然有一个跟INotifyCompletion同名的IsCompleted属性，
-        /// 但这里并不是说就在支持await/async了。原因在于它自己是更底层的东西await的支持由
-        /// 上层的valuetask对象完成即可
         /// </remarks>
         public bool IsCompleted => ReferenceEquals(_continuation, s_completedSentinel);
 
@@ -215,9 +208,6 @@ namespace NetGear.Core
         public bool TryOwnAndReset()
         {
             Debug.Assert(_pooled, "Should only be used for pooled objects");
-            // 说明：如果_continuation的状态为available，那么将其置为null（表示征用，异步操作开始pending）
-            // 同时将内部状态全部重置掉
-            // 这里甚至还可以小优化一下，来个while支持下重试实在不行才返回false
             if (ReferenceEquals(Interlocked.CompareExchange(ref _continuation, null, s_availableSentinel), s_availableSentinel))
             {
                 _continuationState = null;
@@ -236,13 +226,6 @@ namespace NetGear.Core
         /// <param name="state">The state to pass to the callback.</param>
         /// <param name="token">The current token that must match <see cref="_currentId"/>.</param>
         /// <param name="flags">Flags that influence the behavior of the callback.</param>
-        /// <remarks>
-        /// 说明：ValueTaskAwaiter的OnCompleted会dispatch到该方法上来；可以简单理解成这就是
-        /// 编译器生成的状态机中那段经典的awaiter调用oncomplete方法。
-        /// 由于上层的awaiter仅仅是一层壳子，最终内层异步方法的同步需求还是得由asyncop自己亲自操刀
-        /// （想想awaitable的saea，同步就是靠其自身的Completed委托来实现的）
-        /// link：https://github.com/dotnet/corert/blob/master/src/System.Private.CoreLib/shared/System/Runtime/CompilerServices/ValueTaskAwaiter.cs
-        /// </remarks>
         public void OnCompleted(Action<object> continuation, object state, short token, ValueTaskSourceOnCompletedFlags flags)
         {
             if (_currentId != token)
@@ -289,13 +272,6 @@ namespace NetGear.Core
                 }
             }
 
-            // 说明：
-            // 此时asyncop对象最重要的就是把continuation安排妥当了：
-            // 如果_continuation为null，表示异步操作还在进行中（pending），那么OnCompleted方法这里实际上干不了
-            // 什么事情，我们只是将参数continuation设置到_continuation，被动的让completer来负责执行该continuation；
-            // 如果_continuation不为null，考虑到这里是OnCompleted方法所以prevContinuation只可能是s_completedSentinel
-            // 表示异步操作已经完成了，最后我们需要自己执行这个callback。
-            // 
             // Try to set the provided continuation into _continuation.  If this succeeds, that means the operation
             // has not yet completed, and the completer will be responsible for invoking the callback.  If this fails,
             // that means the operation has already completed, and we must invoke the callback, but because we're still

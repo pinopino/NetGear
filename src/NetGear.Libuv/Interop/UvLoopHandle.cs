@@ -14,8 +14,6 @@ namespace NetGear.Libuv
 
         public void Init(Uv uv)
         {
-            // 说明：loop此时还没有关联到具体的某一个uv线程，这里只是
-            // 初始化了一个loop结构体拿到了一个句柄而已
             CreateMemory(
                 uv,
                 Thread.CurrentThread.ManagedThreadId,

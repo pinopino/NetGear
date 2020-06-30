@@ -13,8 +13,6 @@ namespace NetGear.Core
     public partial class SocketConnection
     {
         private long _totalBytesReceived;
-        // 说明：
-        // pipe的存在导致现在没有必要对saea进行池化了，nice
         private SocketAwaitableEventArgs _readerArgs;
 
         /// <summary>
@@ -99,7 +97,6 @@ namespace NetGear.Core
                     }
                     else
                     {
-                        // 说明：关于归一线程，参考SocketConnection.Send中DoSendAsync上的注释
                         result = await flushTask;
                         DebugLog("pipe flushed (async)");
                     }

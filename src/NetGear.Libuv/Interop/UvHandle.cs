@@ -58,22 +58,11 @@ namespace NetGear.Libuv
 
         protected override bool ReleaseHandle()
         {
-            // 说明：
-            // 两部分工作需要完成：
-            //  1. libuv自己有清理handle逻辑，所以此处调用uv.close让它自己去搞
-            //  2. 托管世界这边clr有清理逻辑需要做，此处调用DestroyMemory来完成
             var memory = handle;
             if (memory != IntPtr.Zero)
             {
                 handle = IntPtr.Zero;
 
-                // 说明：
-                // 如果当前就是在对应的uv线程上那么直接“inline”执行release动作即可；
-                // 下方的else分支确保了非绑定uv线程如何post release动作到对应线程上。
-                // 所以下一个问题就是为什么会出现非对应绑定线程？
-                // 我的一个猜测就是ReleaseHandle是从SafeHandle而来，这东西为了保证资源
-                // 的安全释放，完全有可能最后是由独立的析构线程来执行的；下面的原始注释
-                // 也印证了这一点。
                 if (Thread.CurrentThread.ManagedThreadId == ThreadId)
                 {
                     _uv.close(memory, _destroyMemory);

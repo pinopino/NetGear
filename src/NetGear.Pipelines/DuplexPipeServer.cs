@@ -54,10 +54,8 @@ namespace NetGear.Pipelines
                 return WriteAsync(message, 0);
             }
 
-            // 说明：函数内部逻辑如此扭曲原因参考DuplexPipe.cs中WriteAsync方法
             protected sealed override ValueTask OnReceiveAsync(ReadOnlySequence<byte> payload, int messageId)
             {
-                // 因为不关心该方法的task结果，所以这里直接void
                 async void AwaitServerToReply(ValueTask<IMemoryOwner<byte>> pendingResponse, int msgId,
                     IMemoryOwner<byte> message)
                 {
@@ -72,8 +70,6 @@ namespace NetGear.Pipelines
                     catch { }
                 }
 
-                // 没有去await valuetask而是采用这样的方式为的是可以省掉await带来的开销
-                // 当然这样做的前提是我们对该task完成后的值并不关心
                 void DisposeOnCompletion(ValueTask task, ref IMemoryOwner<byte> message)
                 {
                     task.AsTask().ContinueWith((t, s) => ((IMemoryOwner<byte>)s)?.Dispose(), message);
@@ -83,8 +79,6 @@ namespace NetGear.Pipelines
                 var msg = payload.Lease();
                 try
                 {
-                    // 说明：
-                    // DuplexPipelineClient也给了个send方法，所以这里我们需要处理messageid为0的情况
                     if (messageId == 0)
                     {
                         var pending = _server.OnReceiveAsync(msg);
@@ -122,8 +116,6 @@ namespace NetGear.Pipelines
         protected bool _disposed;
         protected ITransport _transport;
         private readonly Action<object> _runClientAsync;
-        // value为客户端连接上来的时间戳，对于客户端来说服务端可以做很多事情。这里只是
-        // 做了个示例，比如我们记录下时间戳如果同一个客户端多次上来又断掉可能就要小心了。
         private readonly ConcurrentDictionary<Client, long> _clients;
         private readonly TaskCompletionSource<object> _stoppedTcs;
 
@@ -276,9 +268,6 @@ namespace NetGear.Pipelines
             _clients.TryRemove(client, out _);
         }
 
-        // 说明：
-        // 注意这两个函数的微妙区别，正常的请求响应循环一问一答这种就是ReceiveForReply
-        // 而偶然收到客户端独立发过来的消息就是Receive，当然不加以区别问题也不大
         protected virtual ValueTask OnReceiveAsync(IMemoryOwner<byte> message) => default;
 
         protected abstract ValueTask<IMemoryOwner<byte>> OnReceiveForReplyAsync(IMemoryOwner<byte> message);

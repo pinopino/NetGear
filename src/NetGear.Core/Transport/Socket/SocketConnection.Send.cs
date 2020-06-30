@@ -39,12 +39,6 @@ namespace NetGear.Core
                         CounterHelper.Incr(Counter.OpenSendReadAsync);
                         var read = _sendToSocket.Reader.ReadAsync();
                         CounterHelper.Incr(read.IsCompleted ? Counter.SocketPipeReadReadSync : Counter.SocketPipeReadReadAsync);
-                        // 说明：
-                        // 一次普通的await valuetask，所以这里是如何归一到pipescheduler上的？
-                        // 这个时候只有翻源码能知道答案了：Pipe.DefaultPipeReader.cs中能发现该reader是一个
-                        // IValueTaskSource，另外从ValueTaskAwaiter.cs的代码中不难发现await read;之后OnCompleted
-                        // 被状态机调用时逻辑最终还是dispatch到了下面的IValueTaskSource上执行，在那里会有使用当前
-                        // 上下文中的scheduler的逻辑
                         result = await read;
                         CounterHelper.Decr(Counter.OpenSendReadAsync);
                     }

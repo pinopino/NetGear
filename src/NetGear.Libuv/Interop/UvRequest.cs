@@ -11,7 +11,6 @@ namespace NetGear.Libuv
 
         public virtual void Init(UvThread thread)
         {
-            // 说明：request都关联到某一个具体的uv线程上
 #if DEBUG
             // Store weak handles to all UvRequest objects so we can do leak detection
             // while running tests

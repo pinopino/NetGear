@@ -27,7 +27,6 @@ namespace NetGear.Libuv
 
         public void DangerousInit(UvLoopHandle loop)
         {
-            // 说明：Dangerous只是没有提供leak检测
             var requestSize = loop.Libuv.req_size(Uv.RequestType.CONNECT);
             CreateMemory(
                 loop.Libuv,
