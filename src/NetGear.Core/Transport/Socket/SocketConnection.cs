@@ -97,6 +97,8 @@ namespace NetGear.Core
         private readonly PipeOptions _receiveOptions, _sendOptions;
         private readonly PipeReader _input;
         private readonly PipeWriter _output;
+        private readonly PipeScheduler _inputWriterScheduler;
+        private readonly PipeScheduler _outputReaderScheduler;
         private static List<ArraySegment<byte>> _spareBuffer;
         private volatile ConnectionAbortedException _abortReason;
 
@@ -104,10 +106,24 @@ namespace NetGear.Core
 
         private ISocketsTrace Log { get; }
 
+        public override PipeReader Input { get { return this._input; } }
+
+        public override PipeWriter Output { get { return this._output; } }
+
         /// <summary>
         /// The underlying socket for this connection
         /// </summary>
         public Socket Socket { get; }
+
+        /// <summary>
+        /// When the ShutdownKind relates to a socket error, may contain the socket error code
+        /// </summary>
+        public SocketError SocketError { get; private set; }
+
+        /// <summary>
+        /// When possible, determines how the pipe first reached a close state
+        /// </summary>
+        public PipeShutdownKind ShutdownKind => (PipeShutdownKind)Thread.VolatileRead(ref _socketShutdownKind);
 
         private SocketConnection(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
             SocketConnectionOptions socketConnectionOptions, string name = null)
@@ -125,16 +141,19 @@ namespace NetGear.Core
 
             Socket = socket;
             SocketConnectionOptions = socketConnectionOptions;
-            _sendToSocket = new Pipe(sendPipeOptions); // read from this pipe and send to socket
-            _receiveFromSocket = new Pipe(receivePipeOptions); // recv from socket and push to this pipe
-            _receiveOptions = receivePipeOptions;
             _sendOptions = sendPipeOptions;
+            _receiveOptions = receivePipeOptions;
+            _sendToSocket = new Pipe(_sendOptions); // read from this pipe and send to socket
+            _receiveFromSocket = new Pipe(_receiveOptions); // recv from socket and push to this pipe
 
-            _input = new WrappedReader(_receiveFromSocket.Reader, this);
+            _outputReaderScheduler = _sendOptions.ReaderScheduler; // 输出方向上是一个pipereader
+            _inputWriterScheduler = _receiveOptions.WriterScheduler;
+
             _output = new WrappedWriter(_sendToSocket.Writer, this);
+            _input = new WrappedReader(_receiveFromSocket.Reader, this);
 
-            sendPipeOptions.ReaderScheduler.Schedule(s_DoSendAsync, this);
-            receivePipeOptions.ReaderScheduler.Schedule(s_DoReceiveAsync, this);
+            _outputReaderScheduler.Schedule(s_DoSendAsync, this);
+            _inputWriterScheduler.Schedule(s_DoReceiveAsync, this);
         }
 
         private static readonly Action<object> s_DoReceiveAsync = DoReceiveAsync;
@@ -142,10 +161,6 @@ namespace NetGear.Core
 
         private static readonly Action<object> s_DoSendAsync = DoSendAsync;
         private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().FireAndForget();
-
-        public override PipeReader Input => this._input;
-
-        public override PipeWriter Output => this._output;
 
         /// <summary>
         /// Create a SocketConnection instance over an existing socket
@@ -165,43 +180,9 @@ namespace NetGear.Core
             return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name);
         }
 
-        public override void Abort(ConnectionAbortedException abortReason)
-        {
-            _abortReason = abortReason;
-            Input.CancelPendingRead();
-
-            // Try to gracefully close the socket to match libuv behavior.
-            if (!_receiveAborted)
-            {
-                try
-                {
-                    Socket.Shutdown(SocketShutdown.Receive);
-                    TrySetShutdown(_abortReason, this, PipeShutdownKind.InputWriterCompleted);
-                }
-                catch { }
-            }
-
-            if (!_sendAborted)
-            {
-                try
-                {
-                    Socket.Shutdown(SocketShutdown.Send);
-                    TrySetShutdown(_abortReason, this, PipeShutdownKind.OutputReaderCompleted);
-                }
-                catch { }
-            }
-
-            try
-            {
-                Socket.Close();
-                Socket.Dispose();
-            }
-            catch { }
-        }
-
         private void InputReaderCompleted(Exception ex)
         {
-            TrySetShutdown(ex, this, PipeShutdownKind.InputReaderCompleted);
+            TrySetShutdown(ex, PipeShutdownKind.InputReaderCompleted);
             try
             {
                 this.Socket.Shutdown(SocketShutdown.Receive);
@@ -212,7 +193,42 @@ namespace NetGear.Core
 
         private void OutputWriterCompleted(Exception ex)
         {
-            TrySetShutdown(ex, this, PipeShutdownKind.OutputWriterCompleted);
+            TrySetShutdown(ex, PipeShutdownKind.OutputWriterCompleted);
+        }
+
+        public override void Abort(ConnectionAbortedException abortReason)
+        {
+            _abortReason = abortReason;
+            Input.CancelPendingRead();
+
+            // Try to gracefully close the socket to match libuv behavior.
+            if (!_receiveAborted)
+            {
+                try
+                {
+                    _receiveAborted = true;
+                    Socket.Shutdown(SocketShutdown.Receive);
+                    TrySetShutdown(_abortReason, PipeShutdownKind.InputReaderCompleted);
+                }
+                catch { }
+            }
+
+            if (!_sendAborted)
+            {
+                try
+                {
+                    Socket.Shutdown(SocketShutdown.Send);
+                    TrySetShutdown(_abortReason, PipeShutdownKind.OutputReaderCompleted);
+                }
+                catch { }
+            }
+
+            try
+            {
+                Socket.Close();
+                Socket.Dispose();
+            }
+            catch { }
         }
 
         private static List<ArraySegment<byte>> GetSpareBuffer()
@@ -232,22 +248,12 @@ namespace NetGear.Core
             }
         }
 
-        /// <summary>
-        /// When possible, determines how the pipe first reached a close state
-        /// </summary>
-        public PipeShutdownKind ShutdownKind => (PipeShutdownKind)Thread.VolatileRead(ref _socketShutdownKind);
-
-        /// <summary>
-        /// When the ShutdownKind relates to a socket error, may contain the socket error code
-        /// </summary>
-        public SocketError SocketError { get; private set; }
-
-        private bool TrySetShutdown(Exception ex, SocketConnection connection, PipeShutdownKind kind)
+        private bool TrySetShutdown(Exception ex, PipeShutdownKind kind)
         {
             try
             {
-                return ex is SocketException se ? connection.TrySetShutdown(kind, se.SocketErrorCode)
-                    : connection.TrySetShutdown(kind);
+                return ex is SocketException se ?
+                    TrySetShutdown(kind, se.SocketErrorCode) : TrySetShutdown(kind);
             }
             catch
             {
@@ -274,13 +280,18 @@ namespace NetGear.Core
 
         private bool TrySetShutdown(PipeShutdownKind kind, SocketError socketError)
         {
-            bool win = TrySetShutdown(kind);
-            if (win) SocketError = socketError;
+            var win = TrySetShutdown(kind);
+            if (win)
+                SocketError = socketError;
+
             return win;
         }
 
-        private bool TrySetShutdown(PipeShutdownKind kind) => kind != PipeShutdownKind.None
-           && Interlocked.CompareExchange(ref _socketShutdownKind, (int)kind, 0) == 0;
+        private bool TrySetShutdown(PipeShutdownKind kind)
+        {
+            return kind != PipeShutdownKind.None
+                && Interlocked.CompareExchange(ref _socketShutdownKind, (int)kind, 0) == 0;
+        }
 
         /// <summary>
         /// Set recommended socket options for client sockets

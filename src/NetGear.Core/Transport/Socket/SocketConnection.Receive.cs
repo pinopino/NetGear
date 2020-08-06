@@ -23,7 +23,7 @@ namespace NetGear.Core
         /// <summary>
         /// The number of bytes received in the last read
         /// </summary>
-        public int LastReceived { get; private set; }
+        public int LastReceived { private set; get; }
 
         private async Task DoReceiveAsync()
         {
@@ -33,7 +33,7 @@ namespace NetGear.Core
             {
                 // 说明：recv方向上是recv from socket and push to pipe，所以这里回调应该是
                 // 执行在WriterScheduler上
-                _readerArgs = new SocketAwaitableEventArgs(InlineReads ? null : _receiveOptions.WriterScheduler);
+                _readerArgs = new SocketAwaitableEventArgs(InlineReads ? null : _inputWriterScheduler);
                 while (true)
                 {
                     if (ZeroLengthReads && Socket.Available == 0)
@@ -181,7 +181,7 @@ namespace NetGear.Core
                 DebugLog($"marking {nameof(Input)} as complete");
                 try { _receiveFromSocket.Writer.Complete(error); } catch { }
 
-                TrySetShutdown(error, this, PipeShutdownKind.InputWriterCompleted);
+                TrySetShutdown(error, PipeShutdownKind.InputWriterCompleted);
 
                 var args = _readerArgs;
                 _readerArgs = null;

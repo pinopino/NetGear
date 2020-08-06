@@ -13,6 +13,7 @@ namespace NetGear.Core
         /// Default
         /// </summary>
         None = 0,
+
         /// <summary>
         /// When no data is currently available, perform a zero-length read as a buffer-free wait mechanism
         /// </summary>
