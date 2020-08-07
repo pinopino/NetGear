@@ -3,12 +3,16 @@ using System;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace NetGear.Core
 {
     public partial class SocketConnection
     {
+        private static readonly bool IsWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        private static readonly bool IsMacOS = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+
         /// <summary>
         /// Open a new or existing socket as a client
         /// </summary>
@@ -82,6 +86,23 @@ namespace NetGear.Core
                     socket.IOControl(SIO_LOOPBACK_FAST_PATH, optionInValue, null);
                 }
             }
+        }
+
+        private static bool IsConnectionResetError(SocketError errorCode)
+        {
+            // A connection reset can be reported as SocketError.ConnectionAborted on Windows.
+            // ProtocolType can be removed once https://github.com/dotnet/corefx/issues/31927 is fixed.
+            return errorCode == SocketError.ConnectionReset ||
+                   errorCode == SocketError.Shutdown ||
+                   (errorCode == SocketError.ConnectionAborted && IsWindows);
+        }
+
+        private static bool IsConnectionAbortError(SocketError errorCode)
+        {
+            // Calling Dispose after ReceiveAsync can cause an "InvalidArgument" error on *nix.
+            return errorCode == SocketError.OperationAborted ||
+                   errorCode == SocketError.Interrupted ||
+                   (errorCode == SocketError.InvalidArgument && !IsWindows);
         }
     }
 }

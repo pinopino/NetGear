@@ -91,7 +91,6 @@ namespace NetGear.Core
                 => _writer.OnReaderCompleted(callback, state);
         }
 
-        private int _socketShutdownKind;
         private volatile bool _sendAborted, _receiveAborted;
         private readonly Pipe _sendToSocket, _receiveFromSocket;
         private readonly PipeOptions _receiveOptions, _sendOptions;
@@ -100,7 +99,11 @@ namespace NetGear.Core
         private readonly PipeScheduler _inputWriterScheduler;
         private readonly PipeScheduler _outputReaderScheduler;
         private static List<ArraySegment<byte>> _spareBuffer;
-        private volatile ConnectionAbortedException _abortReason;
+
+        private int _socketShutdownKind;
+        private volatile bool _socketDisposed;
+        private volatile Exception _shutdownReason;
+        private readonly object _shutdownLock = new object();
 
         private string Name { get; }
 
@@ -198,53 +201,39 @@ namespace NetGear.Core
 
         public override void Abort(ConnectionAbortedException abortReason)
         {
-            _abortReason = abortReason;
-            Input.CancelPendingRead();
+            Shutdown(abortReason);
+        }
 
-            // Try to gracefully close the socket to match libuv behavior.
-            if (!_receiveAborted)
+        private void Shutdown(Exception shutdownReason)
+        {
+            lock (_shutdownLock)
             {
-                try
+                _shutdownReason = shutdownReason;
+                if (CloseOnBoth)
                 {
+                    if (_socketDisposed)
+                        return;
+
+                    _socketDisposed = true;
+                    try { Socket.Shutdown(SocketShutdown.Both); } catch { }
+                    try { Socket.Dispose(); } catch { }
+                }
+                else if (CloseOnRecv)
+                {
+                    if (_receiveAborted)
+                        return;
+
                     _receiveAborted = true;
-                    Socket.Shutdown(SocketShutdown.Receive);
-                    TrySetShutdown(_abortReason, PipeShutdownKind.InputReaderCompleted);
+                    try { Socket.Shutdown(SocketShutdown.Receive); } catch { }
                 }
-                catch { }
-            }
-
-            if (!_sendAborted)
-            {
-                try
+                else if (CloseOnSend)
                 {
-                    Socket.Shutdown(SocketShutdown.Send);
-                    TrySetShutdown(_abortReason, PipeShutdownKind.OutputReaderCompleted);
+                    if (_sendAborted)
+                        return;
+
+                    _sendAborted = true;
+                    try { Socket.Shutdown(SocketShutdown.Send); } catch { }
                 }
-                catch { }
-            }
-
-            try
-            {
-                Socket.Close();
-                Socket.Dispose();
-            }
-            catch { }
-        }
-
-        private static List<ArraySegment<byte>> GetSpareBuffer()
-        {
-            var existing = Interlocked.Exchange(ref _spareBuffer, null);
-            existing?.Clear();
-            return existing;
-        }
-
-        private static void RecycleSpareBuffer(SocketAwaitableEventArgs args)
-        {
-            // note: the BufferList getter is much less expensive then the setter.
-            if (args?.BufferList is List<ArraySegment<byte>> list)
-            {
-                args.BufferList = null; // see #26 - don't want it being reused by the next piece of IO
-                Interlocked.Exchange(ref _spareBuffer, list);
             }
         }
 
@@ -315,6 +304,23 @@ namespace NetGear.Core
             if (socket.AddressFamily == AddressFamily.Unix) return;
 
             try { socket.NoDelay = true; } catch (Exception ex) { Console.WriteLine(nameof(SocketConnection), ex.Message); }
+        }
+
+        private static List<ArraySegment<byte>> GetSpareBuffer()
+        {
+            var existing = Interlocked.Exchange(ref _spareBuffer, null);
+            existing?.Clear();
+            return existing;
+        }
+
+        private static void RecycleSpareBuffer(SocketAwaitableEventArgs args)
+        {
+            // note: the BufferList getter is much less expensive then the setter.
+            if (args?.BufferList is List<ArraySegment<byte>> list)
+            {
+                args.BufferList = null; // see #26 - don't want it being reused by the next piece of IO
+                Interlocked.Exchange(ref _spareBuffer, list);
+            }
         }
 
         public override string ToString() => Name;

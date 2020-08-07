@@ -114,16 +114,13 @@ namespace NetGear.Core
                     }
                 }
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionReset)
+            catch (SocketException ex) when (IsConnectionResetError(ex.SocketErrorCode))
             {
                 TrySetShutdown(PipeShutdownKind.ReadSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
                 error = new ConnectionResetException(ex.Message, ex);
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted
-                                             || ex.SocketErrorCode == SocketError.ConnectionAborted
-                                             || ex.SocketErrorCode == SocketError.Interrupted
-                                             || ex.SocketErrorCode == SocketError.InvalidArgument)
+            catch (SocketException ex) when (IsConnectionAbortError(ex.SocketErrorCode))
             {
                 TrySetShutdown(PipeShutdownKind.ReadSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
@@ -164,10 +161,9 @@ namespace NetGear.Core
             {
                 if (_receiveAborted)
                 {
-                    error = error ?? _abortReason ?? new ConnectionAbortedException();
+                    error = error ?? _shutdownReason ?? new ConnectionAbortedException();
                 }
 
-                _receiveAborted = true;
                 try
                 {
                     DebugLog($"shutting down socket-receive");
@@ -189,7 +185,6 @@ namespace NetGear.Core
             }
 
             DebugLog(error == null ? "exiting with success" : $"exiting with failure: {error.Message}");
-            //return error;
         }
 
         private static void DoReceive(Socket socket, SocketAwaitableEventArgs args, Memory<byte> buffer, string name)

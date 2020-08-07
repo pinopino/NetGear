@@ -33,11 +33,16 @@ namespace NetGear.Core
         /// During async connects, the awaiter should continue on the IO thread
         /// </summary>
         InlineConnect = 1 << 3,
+
+        CloseOnSend = 1 << 4,
+
+        CloseOnRecv = 1 << 5,
     }
 
     public partial class SocketConnection
     {
         private SocketConnectionOptions SocketConnectionOptions { get; }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool HasFlag(SocketConnectionOptions option) => (option & SocketConnectionOptions) != 0;
 
@@ -57,6 +62,24 @@ namespace NetGear.Core
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => HasFlag(SocketConnectionOptions.InlineWrites);
+        }
+
+        private bool CloseOnSend
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => HasFlag(SocketConnectionOptions.CloseOnSend);
+        }
+
+        private bool CloseOnRecv
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => HasFlag(SocketConnectionOptions.CloseOnRecv);
+        }
+
+        private bool CloseOnBoth
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => HasFlag(SocketConnectionOptions.CloseOnRecv | SocketConnectionOptions.CloseOnSend);
         }
     }
 }
