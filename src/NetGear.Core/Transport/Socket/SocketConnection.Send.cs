@@ -42,8 +42,8 @@ namespace NetGear.Core
                         result = await read;
                         CounterHelper.Decr(Counter.OpenSendReadAsync);
                     }
-                    var buffer = result.Buffer;
 
+                    var buffer = result.Buffer;
                     if (result.IsCanceled || (result.IsCompleted && buffer.IsEmpty))
                     {
                         DebugLog(result.IsCanceled ? "cancelled" : "complete");
@@ -61,9 +61,12 @@ namespace NetGear.Core
 
                             DebugLog($"sending {buffer.Length} bytes over socket...");
                             CounterHelper.Incr(Counter.OpenSendWriteAsync);
+
                             DoSend(Socket, _writerArgs, buffer, Name);
                             CounterHelper.Incr(_writerArgs.IsCompleted ? Counter.SocketSendAsyncSync : Counter.SocketSendAsyncAsync);
-                            Interlocked.Add(ref _totalBytesSent, await _writerArgs);
+                            DebugLog(_writerArgs.IsCompleted ? "send is sync" : "send is async");
+                            var bytesSend = await _writerArgs;
+                            Interlocked.Add(ref _totalBytesSent, bytesSend);
                             CounterHelper.Decr(Counter.OpenSendWriteAsync);
                         }
                         else if (result.IsCompleted)
@@ -80,19 +83,20 @@ namespace NetGear.Core
                 }
                 TrySetShutdown(PipeShutdownKind.WriteEndOfStream);
             }
-            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted)
+            catch (SocketException ex) when (IsConnectionResetError(ex.SocketErrorCode))
             {
                 TrySetShutdown(PipeShutdownKind.WriteSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
+                error = new ConnectionResetException(ex.Message, ex);
+            }
+            catch (SocketException ex) when (IsConnectionAbortError(ex.SocketErrorCode))
+            {
+                TrySetShutdown(PipeShutdownKind.WriteSocketError, ex.SocketErrorCode);
+                DebugLog($"fail: {ex.SocketErrorCode}");
+                // This should always be ignored since Shutdown() must have already been called by Abort().
                 error = null;
             }
-            catch (SocketException ex)
-            {
-                TrySetShutdown(PipeShutdownKind.WriteSocketError, ex.SocketErrorCode);
-                DebugLog($"fail: {ex.SocketErrorCode}");
-                error = ex;
-            }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException ex)
             {
                 TrySetShutdown(PipeShutdownKind.WriteDisposed);
                 DebugLog("fail: disposed");
@@ -112,21 +116,8 @@ namespace NetGear.Core
             }
             finally
             {
-                if (_sendAborted)
-                {
-                    error = error ?? _abortReason;
-                }
-
-                // Make sure to close the connection only after the _aborted flag is set.
-                // Without this, the RequestsCanBeAbortedMidRead test will sometimes fail when
-                // a BadHttpRequestException is thrown instead of a TaskCanceledException.
-                _sendAborted = true;
-                try
-                {
-                    DebugLog($"shutting down socket-send");
-                    Socket.Shutdown(SocketShutdown.Send);
-                }
-                catch { }
+                Shutdown(error);
+                error = error ?? _shutdownReason;
 
                 // close *both halves* of the send pipe; we're not
                 // listening *and* we don't want anyone trying to write
@@ -139,8 +130,8 @@ namespace NetGear.Core
                 _writerArgs = null;
                 if (args != null) try { args.Dispose(); } catch { }
             }
+
             DebugLog(error == null ? "exiting with success" : $"exiting with failure: {error.Message}");
-            //return error;
         }
 
         private static void DoSend(Socket socket, SocketAwaitableEventArgs args, in ReadOnlySequence<byte> buffer, string name)

@@ -124,7 +124,7 @@ namespace NetGear.Core
             {
                 TrySetShutdown(PipeShutdownKind.ReadSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
-                if (!_receiveAborted)
+                if (!_socketDisposed)
                 {
                     // Calling Dispose after ReceiveAsync can cause an "InvalidArgument" error on *nix.
                     error = new ConnectionAbortedException();
@@ -140,7 +140,7 @@ namespace NetGear.Core
             {
                 TrySetShutdown(PipeShutdownKind.ReadDisposed);
                 DebugLog($"fail: disposed");
-                if (!_receiveAborted)
+                if (!_socketDisposed)
                 {
                     error = new ConnectionAbortedException();
                 }
@@ -159,24 +159,14 @@ namespace NetGear.Core
             }
             finally
             {
-                if (_receiveAborted)
-                {
-                    error = error ?? _shutdownReason ?? new ConnectionAbortedException();
-                }
-
-                try
-                {
-                    DebugLog($"shutting down socket-receive");
-                    Socket.Shutdown(SocketShutdown.Receive);
-                }
-                catch { }
+                Shutdown(error);
+                error = error ?? _shutdownReason;
 
                 // close the *writer* half of the receive pipe; we won't
                 // be writing any more, but callers can still drain the
                 // pipe if they choose
                 DebugLog($"marking {nameof(Input)} as complete");
                 try { _receiveFromSocket.Writer.Complete(error); } catch { }
-
                 TrySetShutdown(error, PipeShutdownKind.InputWriterCompleted);
 
                 var args = _readerArgs;

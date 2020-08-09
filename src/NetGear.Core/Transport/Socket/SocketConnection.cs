@@ -91,7 +91,6 @@ namespace NetGear.Core
                 => _writer.OnReaderCompleted(callback, state);
         }
 
-        private volatile bool _sendAborted, _receiveAborted;
         private readonly Pipe _sendToSocket, _receiveFromSocket;
         private readonly PipeOptions _receiveOptions, _sendOptions;
         private readonly PipeReader _input;
@@ -208,32 +207,22 @@ namespace NetGear.Core
         {
             lock (_shutdownLock)
             {
-                _shutdownReason = shutdownReason;
-                if (CloseOnBoth)
-                {
-                    if (_socketDisposed)
-                        return;
+                if (_socketDisposed)
+                    return;
 
-                    _socketDisposed = true;
-                    try { Socket.Shutdown(SocketShutdown.Both); } catch { }
-                    try { Socket.Dispose(); } catch { }
-                }
-                else if (CloseOnRecv)
-                {
-                    if (_receiveAborted)
-                        return;
+                // Make sure to close the connection only after the _aborted flag is set.
+                // Without this, the RequestsCanBeAbortedMidRead test will sometimes fail when
+                // a BadHttpRequestException is thrown instead of a TaskCanceledException.
+                _socketDisposed = true;
 
-                    _receiveAborted = true;
-                    try { Socket.Shutdown(SocketShutdown.Receive); } catch { }
-                }
-                else if (CloseOnSend)
-                {
-                    if (_sendAborted)
-                        return;
+                // shutdownReason should only be null if the output/input was completed gracefully, so no one should ever
+                // ever observe the nondescript ConnectionAbortedException except for connection middleware attempting
+                // to half close the connection which is currently unsupported.
+                _shutdownReason = shutdownReason ?? new ConnectionAbortedException("The Socket transport's send/read loop completed gracefully.");
 
-                    _sendAborted = true;
-                    try { Socket.Shutdown(SocketShutdown.Send); } catch { }
-                }
+                DebugLog($"shutting down socket-both");
+                try { Socket.Shutdown(SocketShutdown.Both); } catch { }
+                try { Socket.Dispose(); } catch { }
             }
         }
 

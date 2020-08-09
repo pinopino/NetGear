@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Libuv
 {
-    public partial class UvConnection : TransportConnection, IDisposable
+    public partial class UvConnection : TransportConnection, IDuplexPipe, IDisposable
     {
         private static readonly int MinAllocBufferSize = KestrelMemoryPool.MinimumSegmentSize / 2;
 
@@ -59,7 +59,6 @@ namespace NetGear.Libuv
         public override MemoryPool<byte> MemoryPool => Thread.MemoryPool;
         public override PipeReader Input => this._input;
         public override PipeWriter Output => this._output;
-        public override long TotalBytesWritten => this._totalBytesWritten;
 
         public async Task Start()
         {

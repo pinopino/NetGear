@@ -10,14 +10,5 @@ namespace NetGear.Core
         public abstract string ConnectionId { get; set; }
 
         public abstract IDictionary<object, object> Items { get; set; }
-
-        public virtual void Abort(ConnectionAbortedException abortReason)
-        {
-            // We expect this to be overridden, but this helps maintain back compat
-            // with implementations of ConnectionContext that predate the addition of
-            // ConnectionContext.Abort()
-        }
-
-        public virtual void Abort() => Abort(new ConnectionAbortedException("The connection was aborted by the application."));
     }
 }

@@ -9,7 +9,7 @@ using System.Threading;
 
 namespace NetGear.Core
 {
-    public abstract partial class TransportConnection : ConnectionContext, IDuplexPipe
+    public abstract class TransportConnection : ConnectionContext
     {
         private IDictionary<object, object> _items;
 
@@ -17,13 +17,12 @@ namespace NetGear.Core
         { }
 
         public override string ConnectionId { get; set; }
-        public virtual long TotalBytesWritten { get; }
         public virtual MemoryPool<byte> MemoryPool { get; }
 
-        public IPAddress RemoteAddress { get; set; }
         public int RemotePort { get; set; }
-        public IPAddress LocalAddress { get; set; }
+        public IPAddress RemoteAddress { get; set; }
         public int LocalPort { get; set; }
+        public IPAddress LocalAddress { get; set; }
 
         public override IDictionary<object, object> Items
         {
@@ -44,15 +43,13 @@ namespace NetGear.Core
 
         public virtual PipeWriter Output { get; }
 
-        // DO NOT remove this override to ConnectionContext.Abort. Doing so would cause
-        // any TransportConnection that does not override Abort or calls base.Abort
-        // to stack overflow when IConnectionLifetimeFeature.Abort() is called.
-        // That said, all derived types should override this method should override
-        // this implementation of Abort because canceling pending output reads is not
-        // sufficient to abort the connection if there is backpressure.
-        public override void Abort(ConnectionAbortedException abortReason)
+        public virtual void Abort(ConnectionAbortedException abortReason)
         {
-            Input.CancelPendingRead();
+            // We expect this to be overridden, but this helps maintain back compat
+            // with implementations of ConnectionContext that predate the addition of
+            // ConnectionContext.Abort()
         }
+
+        public virtual void Abort() => Abort(new ConnectionAbortedException("The connection was aborted by the application."));
     }
 }
