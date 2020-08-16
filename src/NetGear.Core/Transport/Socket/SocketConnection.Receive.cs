@@ -33,7 +33,7 @@ namespace NetGear.Core
             {
                 // 说明：recv方向上是recv from socket and push to pipe，所以这里回调应该是
                 // 执行在WriterScheduler上
-                _readerArgs = new SocketAwaitableEventArgs(InlineReads ? null : _inputWriterScheduler);
+                _readerArgs = new SocketAwaitableEventArgs(InlineReads ? null : _receiveOptions.WriterScheduler);
                 while (true)
                 {
                     if (ZeroLengthReads && Socket.Available == 0)

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO.Pipelines;
@@ -12,12 +13,14 @@ namespace NetGear.Core
     public abstract class TransportConnection : ConnectionContext
     {
         private IDictionary<object, object> _items;
+        private readonly object _heartbeatLock = new object();
+        private List<(Action<object> handler, object state)> _heartbeatHandlers;
 
         public TransportConnection()
         { }
 
         public override string ConnectionId { get; set; }
-        public virtual MemoryPool<byte> MemoryPool { get; }
+        public virtual MemoryPool<byte> MemoryPool => throw new NotImplementedException();
 
         public int RemotePort { get; set; }
         public IPAddress RemoteAddress { get; set; }
@@ -42,6 +45,35 @@ namespace NetGear.Core
         public virtual PipeReader Input { get; }
 
         public virtual PipeWriter Output { get; }
+
+        public void TickHeartbeat()
+        {
+            lock (_heartbeatLock)
+            {
+                if (_heartbeatHandlers == null)
+                {
+                    return;
+                }
+
+                foreach (var (handler, state) in _heartbeatHandlers)
+                {
+                    handler(state);
+                }
+            }
+        }
+
+        public void OnHeartbeat(Action<object> action, object state)
+        {
+            lock (_heartbeatLock)
+            {
+                if (_heartbeatHandlers == null)
+                {
+                    _heartbeatHandlers = new List<(Action<object> handler, object state)>();
+                }
+
+                _heartbeatHandlers.Add((action, state));
+            }
+        }
 
         public virtual void Abort(ConnectionAbortedException abortReason)
         {

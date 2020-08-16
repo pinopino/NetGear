@@ -1,49 +1,29 @@
 ﻿using NetGear.Core;
+using NetGear.Pipelines.Server;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace NetGear.Pipelines
 {
-    public abstract class DuplexPipeServer : IConnectionDispatcher, IDisposable
+    public abstract partial class DuplexPipeServer : IConnectionDispatcher, IDisposable
     {
-        /// <summary>
-        /// The state of a client connection
-        /// </summary>
-        protected readonly struct ClientConnection
-        {
-            internal ClientConnection(IDuplexPipe connection, EndPoint remoteEndPoint)
-            {
-                Connection = connection;
-                RemoteEndPoint = remoteEndPoint;
-            }
-
-            /// <summary>
-            /// The transport to use for this connection
-            /// </summary>
-            public IDuplexPipe Connection { get; }
-
-            /// <summary>
-            /// The remote endpoint that the client connected from
-            /// </summary>
-            public EndPoint RemoteEndPoint { get; }
-        }
-
         protected class Client : DuplexPipe
         {
             private readonly DuplexPipeServer _server;
 
-            public EndPoint RemoteEndPoint { get; }
+            public string ID => Connection.ConnectionId;
 
-            public Client(IDuplexPipe pipe, EndPoint remoteEndPoint, DuplexPipeServer server)
-                : base(pipe)
+            public TransportConnection Connection { private set; get; }
+
+            public Client(DuplexPipeServer server, TransportConnection connection)
+                : base(connection as SocketConnection)
             {
                 _server = server;
-                RemoteEndPoint = remoteEndPoint;
+                Connection = connection;
             }
 
             public Task RunAsync(CancellationToken cancellationToken = default)
@@ -115,20 +95,19 @@ namespace NetGear.Pipelines
         private bool _hasStarted;
         protected bool _disposed;
         protected ITransport _transport;
-        private readonly Action<object> _runClientAsync;
-        private readonly ConcurrentDictionary<Client, long> _clients;
+        private readonly ConnectionDelegate _runClientAsync;
         private readonly TaskCompletionSource<object> _stoppedTcs;
 
         protected DuplexPipeServer()
         {
-            _clients = new ConcurrentDictionary<Client, long>();
+            _clientReferences = new ConcurrentDictionary<long, ClientReference>();
             _stoppedTcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _runClientAsync = async boxed =>
+            _runClientAsync = async conn =>
             {
-                var info = (ClientConnection)boxed;
-                var client = new Client(info.Connection, info.RemoteEndPoint, this);
-                AddClient(client);
+                var id = Interlocked.Increment(ref _lastConnectionId);
+                var client = new Client(this, conn);
+                AddClient(id, client);
 
                 try
                 {
@@ -146,13 +125,15 @@ namespace NetGear.Pipelines
                 finally
                 {
                     client.Dispose();
-                    RemoveClient(client);
+                    RemoveClient(id);
                     OnClientDisconnected(client);
                 }
             };
         }
 
-        public virtual async Task StartAsync(IEndPointInformation endPoint)
+        public virtual async Task StartAsync(IEndPointInformation endPoint,
+            int listenBacklog = 512,
+            PipeOptions sendOptions = null, PipeOptions receiveOptions = null)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
@@ -161,7 +142,7 @@ namespace NetGear.Pipelines
                 throw new InvalidOperationException("server has already started");
             _hasStarted = true;
 
-            _transport = new SocketTransport(endPoint, this, null);
+            _transport = new SocketTransport(endPoint, this, listenBacklog, sendOptions, receiveOptions);
 
             await _transport.BindAsync().ConfigureAwait(false);
 
@@ -195,10 +176,11 @@ namespace NetGear.Pipelines
             _stoppedTcs.TrySetResult(null);
         }
 
-        public virtual Task OnConnection(IDuplexPipe connection)
+        // 这个方法我始终觉得不应该为public
+        public Task OnConnection(TransportConnection connection)
         {
-            _runClientAsync(connection);
-            return Task.CompletedTask;
+            connection.ConnectionId = CorrelationIdGenerator.GetNextId();
+            return _runClientAsync(connection);
         }
 
         /// <summary>
@@ -222,7 +204,7 @@ namespace NetGear.Pipelines
         /// </summary>
         protected virtual void OnClientConnected(Client client)
         {
-            Console.WriteLine($"新连接已建立<{client.RemoteEndPoint}>，当前总连接数：{ClientsCount}");
+            Console.WriteLine($"新连接已建立<{client.Connection.RemoteAddress}>，当前总连接数：{ClientsCount}");
         }
 
         /// <summary>
@@ -230,7 +212,7 @@ namespace NetGear.Pipelines
         /// </summary>
         protected virtual void OnClientDisconnected(Client client)
         {
-            Console.WriteLine($"连接<{client.RemoteEndPoint}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
+            Console.WriteLine($"连接<{client.Connection.RemoteAddress}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
         }
 
         /// <summary>
@@ -238,34 +220,7 @@ namespace NetGear.Pipelines
         /// </summary>
         protected virtual void OnClientFaulted(Client client, Exception exception)
         {
-            Console.WriteLine($"连接<{client.RemoteEndPoint}>异常，消息：{exception.Message}");
-        }
-
-        public int ClientsCount
-        {
-            get
-            {
-                if (_disposed)
-                    throw new ObjectDisposedException(ToString());
-
-                return _clients.Count;
-            }
-        }
-
-        private void AddClient(Client client)
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(ToString());
-
-            _clients.TryAdd(client, DateTime.UtcNow.Ticks);
-        }
-
-        private void RemoveClient(Client client)
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(ToString());
-
-            _clients.TryRemove(client, out _);
+            Console.WriteLine($"连接<{client.Connection.RemoteAddress}>异常，消息：{exception.Message}");
         }
 
         protected virtual ValueTask OnReceiveAsync(IMemoryOwner<byte> message) => default;
@@ -289,12 +244,15 @@ namespace NetGear.Pipelines
                 throw new ObjectDisposedException(ToString());
 
             int count = 0;
-            foreach (var client in _clients.Keys)
+            foreach (var clientRef in _clientReferences.Values)
             {
                 try
                 {
-                    await client.SendAsync(message);
-                    count++;
+                    if (clientRef.TryGetClient(out Client client))
+                    {
+                        await client.SendAsync(message);
+                        count++;
+                    }
                 }
                 catch { } // ignore failures on specific clients
             }
@@ -305,11 +263,12 @@ namespace NetGear.Pipelines
         public void Dispose()
         {
             _disposed = true;
-            foreach (var client in _clients.Keys)
+            foreach (var clientRef in _clientReferences.Values)
             {
-                client.Dispose();
+                if (clientRef.TryGetClient(out Client client))
+                    client.Dispose();
             }
-            _clients.Clear();
+            _clientReferences.Clear();
         }
     }
 }

@@ -23,7 +23,11 @@ namespace NetGear.Core
         private readonly IEndPointInformation _endPointInformation;
         private readonly IConnectionDispatcher _dispatcher;
 
-        public SocketTransport(IEndPointInformation endPointInformation, IConnectionDispatcher dispatcher, ISocketsTrace trace)
+        public SocketTransport(IEndPointInformation endPointInformation,
+            IConnectionDispatcher dispatcher,
+            int listenBacklog,
+            PipeOptions sendOptions = null,
+            PipeOptions receiveOptions = null)
         {
             if (endPointInformation == null)
                 throw new ArgumentNullException(nameof(endPointInformation));
@@ -31,16 +35,13 @@ namespace NetGear.Core
                 throw new InvalidOperationException(nameof(endPointInformation.IPEndPoint));
             if (dispatcher == null)
                 throw new ArgumentNullException(nameof(dispatcher));
-            if (trace == null)
-                throw new ArgumentNullException(nameof(trace));
 
             _endPointInformation = endPointInformation;
             _dispatcher = dispatcher;
-            _trace = trace;
-            _backlog = 512;
+            _backlog = listenBacklog;
 
-            _sendPipeOptions = PipeOptions.Default;
-            _receivePipeOptions = PipeOptions.Default;
+            _sendPipeOptions = sendOptions;
+            _receivePipeOptions = receiveOptions;
         }
 
         public Task BindAsync()
@@ -91,9 +92,7 @@ namespace NetGear.Core
                     SocketConnection.SetRecommendedServerOptions(clientSocket);
 
                     var connection = SocketConnection.Create(clientSocket, _sendPipeOptions, _receivePipeOptions);
-                    Scheduler(_receivePipeOptions?.ReaderScheduler,
-                        state => _dispatcher.OnConnection((SocketConnection)state),
-                        connection);
+                    _dispatcher.OnConnection(connection).FireAndForget();
                 }
             }
             catch (NullReferenceException)

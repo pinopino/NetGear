@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Pipelines;
+using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -95,8 +96,6 @@ namespace NetGear.Core
         private readonly PipeOptions _receiveOptions, _sendOptions;
         private readonly PipeReader _input;
         private readonly PipeWriter _output;
-        private readonly PipeScheduler _inputWriterScheduler;
-        private readonly PipeScheduler _outputReaderScheduler;
         private static List<ArraySegment<byte>> _spareBuffer;
 
         private int _socketShutdownKind;
@@ -142,20 +141,24 @@ namespace NetGear.Core
                 receivePipeOptions = PipeOptions.Default;
 
             Socket = socket;
+            var localEndPoint = (IPEndPoint)Socket.LocalEndPoint;
+            var remoteEndPoint = (IPEndPoint)Socket.RemoteEndPoint;
+            LocalAddress = localEndPoint.Address;
+            LocalPort = localEndPoint.Port;
+            RemoteAddress = remoteEndPoint.Address;
+            RemotePort = remoteEndPoint.Port;
+
             SocketConnectionOptions = socketConnectionOptions;
             _sendOptions = sendPipeOptions;
             _receiveOptions = receivePipeOptions;
             _sendToSocket = new Pipe(_sendOptions); // read from this pipe and send to socket
             _receiveFromSocket = new Pipe(_receiveOptions); // recv from socket and push to this pipe
 
-            _outputReaderScheduler = _sendOptions.ReaderScheduler; // 输出方向上是一个pipereader
-            _inputWriterScheduler = _receiveOptions.WriterScheduler;
-
             _output = new WrappedWriter(_sendToSocket.Writer, this);
             _input = new WrappedReader(_receiveFromSocket.Reader, this);
 
-            _outputReaderScheduler.Schedule(s_DoSendAsync, this);
-            _inputWriterScheduler.Schedule(s_DoReceiveAsync, this);
+            _sendOptions.ReaderScheduler.Schedule(s_DoSendAsync, this);
+            _receiveOptions.WriterScheduler.Schedule(s_DoReceiveAsync, this);
         }
 
         private static readonly Action<object> s_DoReceiveAsync = DoReceiveAsync;

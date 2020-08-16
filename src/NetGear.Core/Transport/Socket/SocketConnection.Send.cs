@@ -57,7 +57,7 @@ namespace NetGear.Core
                             // 说明：send方向上是read from pipe and send to socket，所以这里回调应该是
                             // 执行在ReaderScheduler上
                             if (_writerArgs == null)
-                                _writerArgs = new SocketAwaitableEventArgs(InlineWrites ? null : _outputReaderScheduler);
+                                _writerArgs = new SocketAwaitableEventArgs(InlineWrites ? null : _sendOptions.ReaderScheduler);
 
                             DebugLog($"sending {buffer.Length} bytes over socket...");
                             CounterHelper.Incr(Counter.OpenSendWriteAsync);

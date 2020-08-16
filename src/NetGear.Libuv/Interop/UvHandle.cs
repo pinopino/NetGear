@@ -8,19 +8,19 @@ using System.Threading;
 namespace NetGear.Libuv
 {
     /// <summary>
-    /// ¶ÔÓ¦libuvµÄ·ÇÍĞ¹Ü¾ä±ú£¬×÷Îª»ùÀàÖ÷ÒªÌá¹©Á½¸ö¾ä±ú²Ù×÷º¯Êı£¬´´½¨ºÍÏú»Ù
+    /// å¯¹åº”libuvçš„éæ‰˜ç®¡å¥æŸ„ï¼Œä½œä¸ºåŸºç±»ä¸»è¦æä¾›ä¸¤ä¸ªå¥æŸ„æ“ä½œå‡½æ•°ï¼Œåˆ›å»ºå’Œé”€æ¯
     /// </summary>
     public abstract class UvHandle : UvMemory
     {
         private static readonly Uv.uv_close_cb _destroyMemory = (handle) => DestroyMemory(handle);
         private Action<Action<IntPtr>, IntPtr> _queueCloseHandle;
 
-        /* ËµÃ÷£º
-            libuv»ù±¾Âß¼­£º
+        /* è¯´æ˜ï¼š
+            libuvåŸºæœ¬é€»è¾‘ï¼š
 
-            uv_loop_init ³õÊ¼»¯loop£»Ò²¿ÉÒÔÖ±½ÓÊ¹ÓÃÄ¬ÈÏÌá¹©µÄuv_default_loop
+            uv_loop_init åˆå§‹åŒ–loopï¼›ä¹Ÿå¯ä»¥ç›´æ¥ä½¿ç”¨é»˜è®¤æä¾›çš„uv_default_loop
 
-            handle_init ³õÊ¼»¯ĞèÒªµÄhandle£º
+            handle_init åˆå§‹åŒ–éœ€è¦çš„handleï¼š
             === Handle types. ===
             typedef struct uv_loop_s uv_loop_t;
             typedef struct uv_handle_s uv_handle_t;
@@ -29,18 +29,18 @@ namespace NetGear.Libuv
             typedef struct uv_udp_s uv_udp_t;
             typedef struct uv_pipe_s uv_pipe_t;
             ...
-            handleÒ²ĞèÒª³õÊ¼»¯
+            handleä¹Ÿéœ€è¦åˆå§‹åŒ–
             uv_TYPE_init(uv_loop_t*, uv_TYPE_t*)
-            ³õÊ¼»¯¶ÔÓ¦TYPEµÄhandle£¬°ó¶¨µ½ÊÂ¼şÑ­»·ÉÏloop£¨loopµÄhandle_queue¶ÓÎ²¶àÒ»¸ö´Ëhandle£©£»¸ÃinitÖ»ÊÇ
-            ¹ÒÔÚhandleÉÏ£¬²¢Ã»ÓĞ¼¤»îËü
+            åˆå§‹åŒ–å¯¹åº”TYPEçš„handleï¼Œç»‘å®šåˆ°äº‹ä»¶å¾ªç¯ä¸Šloopï¼ˆloopçš„handle_queueé˜Ÿå°¾å¤šä¸€ä¸ªæ­¤handleï¼‰ï¼›è¯¥initåªæ˜¯
+            æŒ‚åœ¨handleä¸Šï¼Œå¹¶æ²¡æœ‰æ¿€æ´»å®ƒ
 
-            handle_start ¿ªÆôhandle£ºuv_TYPE_start(uv_TYPE_t* handle, uv_TYPE_cb cb)
-            °Ñhandle×Ô¼ºµÄÏûÏ¢queue¹Òµ½loopÖĞ¶ÔÓ¦TYPEµÄ¶ÔÓ¦ÏûÏ¢¶ÓÁĞÉÏ£»ÌîÈëÒ»¸öcallback£»´ËÊ±handle»á±»¼¤»î£¬
-            »á¿ªÊ¼ÊÕµ½ÊÂ¼şÍ¨Öª
+            handle_start å¼€å¯handleï¼šuv_TYPE_start(uv_TYPE_t* handle, uv_TYPE_cb cb)
+            æŠŠhandleè‡ªå·±çš„æ¶ˆæ¯queueæŒ‚åˆ°loopä¸­å¯¹åº”TYPEçš„å¯¹åº”æ¶ˆæ¯é˜Ÿåˆ—ä¸Šï¼›å¡«å…¥ä¸€ä¸ªcallbackï¼›æ­¤æ—¶handleä¼šè¢«æ¿€æ´»ï¼Œ
+            ä¼šå¼€å§‹æ”¶åˆ°äº‹ä»¶é€šçŸ¥
 
-            uv_run Ö´ĞĞloop£ºuv_run(uv_loop_t* loop, uv_run_mode mode)
+            uv_run æ‰§è¡Œloopï¼šuv_run(uv_loop_t* loop, uv_run_mode mode)
 
-            uv_loop_close ¹Ø±Õloop
+            uv_loop_close å…³é—­loop
         */
         protected UvHandle(ILibuvTrace logger)
             : base(logger)
