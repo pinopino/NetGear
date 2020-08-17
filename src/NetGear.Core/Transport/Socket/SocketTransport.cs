@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using NetGear.Core.Common;
 using System;
+using System.Buffers;
+using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
@@ -12,16 +14,54 @@ namespace NetGear.Core
 {
     public class SocketTransport : ITransport
     {
+        private static readonly PipeScheduler[] ThreadPoolSchedulerArray = new PipeScheduler[] { PipeScheduler.ThreadPool };
+
         private int _backlog;
+        private readonly int _numSchedulers;
         private volatile bool _unbinding;
         private Socket _listener;
         private Task _listenTask;
         private Exception _listenException;
         private PipeOptions _sendPipeOptions;
         private PipeOptions _receivePipeOptions;
+        private readonly PipeScheduler[] _schedulers;
         private readonly ISocketsTrace _trace;
         private readonly IEndPointInformation _endPointInformation;
         private readonly IConnectionDispatcher _dispatcher;
+
+        public SocketTransport(IEndPointInformation endPointInformation,
+            IConnectionDispatcher dispatcher,
+            int listenBacklog,
+            int ioQueueCount,
+            MemoryPool<byte> pool = null)
+        {
+            if (endPointInformation == null)
+                throw new ArgumentNullException(nameof(endPointInformation));
+            if (endPointInformation.Type != ListenType.IPEndPoint)
+                throw new InvalidOperationException(nameof(endPointInformation.IPEndPoint));
+            if (dispatcher == null)
+                throw new ArgumentNullException(nameof(dispatcher));
+            if (listenBacklog < 0)
+                throw new InvalidOperationException(nameof(listenBacklog));
+
+            _endPointInformation = endPointInformation;
+            _dispatcher = dispatcher;
+            _backlog = listenBacklog;
+
+            if (ioQueueCount > 0)
+            {
+                _numSchedulers = ioQueueCount;
+                _schedulers = new IOQueue[_numSchedulers];
+
+                for (var i = 0; i < _numSchedulers; i++)
+                    _schedulers[i] = new IOQueue();
+            }
+            else
+            {
+                _numSchedulers = ThreadPoolSchedulerArray.Length;
+                _schedulers = ThreadPoolSchedulerArray;
+            }
+        }
 
         public SocketTransport(IEndPointInformation endPointInformation,
             IConnectionDispatcher dispatcher,
@@ -35,6 +75,8 @@ namespace NetGear.Core
                 throw new InvalidOperationException(nameof(endPointInformation.IPEndPoint));
             if (dispatcher == null)
                 throw new ArgumentNullException(nameof(dispatcher));
+
+            Debug.Assert(listenBacklog > 0);
 
             _endPointInformation = endPointInformation;
             _dispatcher = dispatcher;

@@ -4,6 +4,7 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -131,9 +132,15 @@ namespace NetGear.Pipelines
             };
         }
 
-        public virtual async Task StartAsync(IEndPointInformation endPoint,
+        public async Task StartAsync(IPEndPoint endPoint,
+            PipeOptions outputPipeOptions,
+            PipeOptions inputPipeOptions)
+            => await StartAsync(endPoint, 512, outputPipeOptions, inputPipeOptions);
+
+        public virtual async Task StartAsync(IPEndPoint endPoint,
             int listenBacklog = 512,
-            PipeOptions sendOptions = null, PipeOptions receiveOptions = null)
+            PipeOptions outputPipeOptions = null,
+            PipeOptions inputPipeOptions = null)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
@@ -142,11 +149,16 @@ namespace NetGear.Pipelines
                 throw new InvalidOperationException("server has already started");
             _hasStarted = true;
 
-            _transport = new SocketTransport(endPoint, this, listenBacklog, sendOptions, receiveOptions);
+            var endPointInfo = new ListenOptions(endPoint);
+            _transport = new SocketTransport(endPointInfo,
+                this,
+                listenBacklog,
+                outputPipeOptions ?? PipeOptions.Default,
+                inputPipeOptions ?? PipeOptions.Default);
 
             await _transport.BindAsync().ConfigureAwait(false);
 
-            OnServerStarted(endPoint);
+            OnServerStarted(endPointInfo);
         }
 
         public virtual async Task StopAsync()

@@ -167,24 +167,6 @@ namespace NetGear.Core
         private static readonly Action<object> s_DoSendAsync = DoSendAsync;
         private static void DoSendAsync(object s) => ((SocketConnection)s).DoSendAsync().FireAndForget();
 
-        /// <summary>
-        /// Create a SocketConnection instance over an existing socket
-        /// </summary>
-        public static SocketConnection Create(Socket socket, PipeOptions pipeOptions = null,
-            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
-        {
-            return new SocketConnection(socket, pipeOptions, pipeOptions, socketConnectionOptions, name);
-        }
-
-        /// <summary>
-        /// Create a SocketConnection instance over an existing socket
-        /// </summary>
-        public static SocketConnection Create(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
-            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
-        {
-            return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name);
-        }
-
         private void InputReaderCompleted(Exception ex)
         {
             TrySetShutdown(ex, PipeShutdownKind.InputReaderCompleted);
