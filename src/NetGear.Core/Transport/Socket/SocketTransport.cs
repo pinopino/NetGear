@@ -2,7 +2,6 @@
 using NetGear.Core.Common;
 using System;
 using System.Buffers;
-using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
@@ -14,7 +13,17 @@ namespace NetGear.Core
 {
     public class SocketTransport : ITransport
     {
-        private static readonly PipeScheduler[] ThreadPoolSchedulerArray = new PipeScheduler[] { PipeScheduler.ThreadPool };
+        private readonly struct PipeOptionsPair
+        {
+            public PipeOptions SendOpts { get; }
+            public PipeOptions ReceiveOpts { get; }
+
+            public PipeOptionsPair(PipeOptions sendOpts, PipeOptions receiveOpts)
+            {
+                SendOpts = sendOpts;
+                ReceiveOpts = receiveOpts;
+            }
+        }
 
         private int _backlog;
         private readonly int _numSchedulers;
@@ -22,9 +31,8 @@ namespace NetGear.Core
         private Socket _listener;
         private Task _listenTask;
         private Exception _listenException;
-        private PipeOptions _sendPipeOptions;
-        private PipeOptions _receivePipeOptions;
-        private readonly PipeScheduler[] _schedulers;
+        private MemoryPool<byte> _pool;
+        private readonly PipeOptionsPair[] _cachedPipeOpts;
         private readonly ISocketsTrace _trace;
         private readonly IEndPointInformation _endPointInformation;
         private readonly IConnectionDispatcher _dispatcher;
@@ -47,27 +55,32 @@ namespace NetGear.Core
             _endPointInformation = endPointInformation;
             _dispatcher = dispatcher;
             _backlog = listenBacklog;
+            _pool = pool;
 
             if (ioQueueCount > 0)
             {
                 _numSchedulers = ioQueueCount;
-                _schedulers = new IOQueue[_numSchedulers];
+                _cachedPipeOpts = new PipeOptionsPair[_numSchedulers];
 
                 for (var i = 0; i < _numSchedulers; i++)
-                    _schedulers[i] = new IOQueue();
+                    _cachedPipeOpts[i] = new PipeOptionsPair(
+                        GetSendPipeOptions(_pool, new IOQueue()),
+                        GetReceivePipeOptions(_pool, new IOQueue()));
             }
             else
             {
-                _numSchedulers = ThreadPoolSchedulerArray.Length;
-                _schedulers = ThreadPoolSchedulerArray;
+                _numSchedulers = 1;
+                _cachedPipeOpts = new PipeOptionsPair[] { new PipeOptionsPair(
+                    GetSendPipeOptions(_pool, new IOQueue()),
+                    GetReceivePipeOptions(_pool, new IOQueue())) };
             }
         }
 
         public SocketTransport(IEndPointInformation endPointInformation,
             IConnectionDispatcher dispatcher,
             int listenBacklog,
-            PipeOptions sendOptions = null,
-            PipeOptions receiveOptions = null)
+            PipeOptions sendOptions,
+            PipeOptions receiveOptions)
         {
             if (endPointInformation == null)
                 throw new ArgumentNullException(nameof(endPointInformation));
@@ -75,15 +88,54 @@ namespace NetGear.Core
                 throw new InvalidOperationException(nameof(endPointInformation.IPEndPoint));
             if (dispatcher == null)
                 throw new ArgumentNullException(nameof(dispatcher));
-
-            Debug.Assert(listenBacklog > 0);
+            if (listenBacklog < 0)
+                throw new InvalidOperationException(nameof(listenBacklog));
 
             _endPointInformation = endPointInformation;
             _dispatcher = dispatcher;
             _backlog = listenBacklog;
 
-            _sendPipeOptions = sendOptions;
-            _receivePipeOptions = receiveOptions;
+            _numSchedulers = 1;
+            _cachedPipeOpts = new PipeOptionsPair[] { new PipeOptionsPair(sendOptions, receiveOptions) };
+        }
+
+        private async Task ListenForConnectionsAsync()
+        {
+            try
+            {
+                while (true)
+                {
+                    for (var i = 0; i < _numSchedulers; i++)
+                    {
+                        var clientSocket = await _listener.AcceptAsync();
+                        SocketConnection.SetRecommendedServerOptions(clientSocket);
+
+                        var connection = SocketConnection.Create(clientSocket, _cachedPipeOpts[i].SendOpts, _cachedPipeOpts[i].ReceiveOpts);
+                        _dispatcher.OnConnection(connection).FireAndForget();
+                    }
+                }
+            }
+            catch (NullReferenceException)
+            { }
+            catch (ObjectDisposedException)
+            { }
+            catch (Exception ex)
+            {
+                if (_unbinding)
+                {
+                    // Means we must be unbinding. Eat the exception.
+                }
+                else
+                {
+                    var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
+                    _trace.LogCritical(ex, mark);
+                    _listenException = new ListenLoopException(mark, ex);
+
+                    // Request shutdown so we can rethrow this exception
+                    // in Stop which should be observable.
+                    _dispatcher.StopAsync().FireAndForget(); // 说明：stop里面调用unbind，以便重新抛出异常
+                }
+            }
         }
 
         public Task BindAsync()
@@ -119,45 +171,9 @@ namespace NetGear.Core
 
             listenSocket.Listen(_backlog);
             _listener = listenSocket;
-            _listenTask = Task.Run(() => ListenForConnectionsAsync());
+            _listenTask = Task.Run(ListenForConnectionsAsync);
 
             return Task.CompletedTask;
-        }
-
-        private async Task ListenForConnectionsAsync()
-        {
-            try
-            {
-                while (true)
-                {
-                    var clientSocket = await _listener.AcceptAsync();
-                    SocketConnection.SetRecommendedServerOptions(clientSocket);
-
-                    var connection = SocketConnection.Create(clientSocket, _sendPipeOptions, _receivePipeOptions);
-                    _dispatcher.OnConnection(connection).FireAndForget();
-                }
-            }
-            catch (NullReferenceException)
-            { }
-            catch (ObjectDisposedException)
-            { }
-            catch (Exception ex)
-            {
-                if (_unbinding)
-                {
-                    // Means we must be unbinding. Eat the exception.
-                }
-                else
-                {
-                    var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
-                    _trace.LogCritical(ex, mark);
-                    _listenException = new ListenLoopException(mark, ex);
-
-                    // Request shutdown so we can rethrow this exception
-                    // in Stop which should be observable.
-                    _dispatcher.StopAsync().FireAndForget(); // 说明：stop里面调用unbind，以便重新抛出异常
-                }
-            }
         }
 
         public async Task UnbindAsync()
@@ -197,6 +213,24 @@ namespace NetGear.Core
 
             (scheduler ?? PipeScheduler.ThreadPool).Schedule(callback, state);
         }
+
+        private static PipeOptions GetReceivePipeOptions(MemoryPool<byte> memoryPool, PipeScheduler writerScheduler)
+            => new PipeOptions
+            (
+                pool: memoryPool,
+                readerScheduler: PipeScheduler.ThreadPool,
+                writerScheduler: writerScheduler,
+                useSynchronizationContext: false
+            );
+
+        private static PipeOptions GetSendPipeOptions(MemoryPool<byte> memoryPool, PipeScheduler readerScheduler)
+            => new PipeOptions
+            (
+                pool: memoryPool,
+                readerScheduler: readerScheduler,
+                writerScheduler: PipeScheduler.ThreadPool,
+                useSynchronizationContext: false
+            );
 
         [DllImport("libc", SetLastError = true)]
         private static extern int setsockopt(int socket, int level, int option_name, IntPtr option_value, uint option_len);

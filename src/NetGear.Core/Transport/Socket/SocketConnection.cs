@@ -127,14 +127,12 @@ namespace NetGear.Core
         public PipeShutdownKind ShutdownKind => (PipeShutdownKind)Thread.VolatileRead(ref _socketShutdownKind);
 
         private SocketConnection(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
-            SocketConnectionOptions socketConnectionOptions, string name = null)
+            SocketConnectionOptions socketConnectionOptions, string name)
         {
             if (socket == null)
                 throw new ArgumentNullException(nameof(socket));
-
             if (string.IsNullOrWhiteSpace(name))
-                name = GetType().Name;
-            Name = name.Trim();
+                Name = GetType().Name.Trim();
             if (sendPipeOptions == null)
                 sendPipeOptions = PipeOptions.Default;
             if (receivePipeOptions == null)

@@ -21,7 +21,8 @@ namespace NetGear.Core
             PipeOptions pipeOptions = null,
             SocketConnectionOptions connectionOptions = SocketConnectionOptions.None,
             Func<SocketConnection, Task> onConnected = null,
-            Socket socket = null, string name = null)
+            Socket socket = null,
+            string name = null)
             => ConnectAsync(endpoint, pipeOptions, pipeOptions, connectionOptions, onConnected, socket, name);
 
         /// <summary>
@@ -29,10 +30,12 @@ namespace NetGear.Core
         /// </summary>
         public static async Task<SocketConnection> ConnectAsync(
             EndPoint endpoint,
-            PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
+            PipeOptions sendPipeOptions,
+            PipeOptions receivePipeOptions,
             SocketConnectionOptions connectionOptions = SocketConnectionOptions.None,
             Func<SocketConnection, Task> onConnected = null,
-            Socket socket = null, string name = null)
+            Socket socket = null,
+            string name = null)
         {
             var addressFamily = endpoint.AddressFamily == AddressFamily.Unspecified ?
                 AddressFamily.InterNetwork : endpoint.AddressFamily;
@@ -66,6 +69,25 @@ namespace NetGear.Core
                 await onConnected(connection).ConfigureAwait(false);
 
             return connection;
+        }
+
+        /// <summary>
+        /// Create a SocketConnection instance over an existing socket；
+        /// 进出两个方向都采用完全一样的设置。通常用于客户端，服务端不会也不应该这样子搞
+        /// </summary>
+        internal static SocketConnection Create(Socket socket, PipeOptions pipeOptions = null,
+            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
+        {
+            return new SocketConnection(socket, pipeOptions, pipeOptions, socketConnectionOptions, name);
+        }
+
+        /// <summary>
+        /// Create a SocketConnection instance over an existing socket
+        /// </summary>
+        internal static SocketConnection Create(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
+            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
+        {
+            return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name);
         }
 
         internal static void SetFastLoopbackOption(Socket socket)

@@ -132,15 +132,13 @@ namespace NetGear.Pipelines
             };
         }
 
-        public async Task StartAsync(IPEndPoint endPoint,
-            PipeOptions outputPipeOptions,
-            PipeOptions inputPipeOptions)
-            => await StartAsync(endPoint, 512, outputPipeOptions, inputPipeOptions);
+        public Task StartAsync(IPEndPoint endPoint, int listenBacklog = 512)
+            => StartAsync(endPoint, listenBacklog, null, null);
 
         public virtual async Task StartAsync(IPEndPoint endPoint,
-            int listenBacklog = 512,
-            PipeOptions outputPipeOptions = null,
-            PipeOptions inputPipeOptions = null)
+            int listenBacklog,
+            PipeOptions outputPipeOptions,
+            PipeOptions inputPipeOptions)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
@@ -150,11 +148,22 @@ namespace NetGear.Pipelines
             _hasStarted = true;
 
             var endPointInfo = new ListenOptions(endPoint);
-            _transport = new SocketTransport(endPointInfo,
-                this,
-                listenBacklog,
-                outputPipeOptions ?? PipeOptions.Default,
-                inputPipeOptions ?? PipeOptions.Default);
+            if (outputPipeOptions == null || inputPipeOptions == null)
+            {
+                _transport = new SocketTransport(endPointInfo,
+                    this,
+                    listenBacklog,
+                    Environment.ProcessorCount * 2,
+                    MemoryPool<byte>.Shared);
+            }
+            else
+            {
+                _transport = new SocketTransport(endPointInfo,
+                    this,
+                    listenBacklog,
+                    outputPipeOptions,
+                    inputPipeOptions);
+            }
 
             await _transport.BindAsync().ConfigureAwait(false);
 
