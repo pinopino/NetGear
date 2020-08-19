@@ -84,6 +84,16 @@ namespace NetGear.Pipelines
                 // If both conditions are false, the connection was removed during the heartbeat.
             }
         }
+
+        public void OnHeartbeat(DateTimeOffset now)
+        {
+            Walk(HeartbeatCallback);
+        }
+
+        private void HeartbeatCallback(Client client)
+        {
+            client.Connection.TickHeartbeat();
+        }
         #endregion
     }
 }

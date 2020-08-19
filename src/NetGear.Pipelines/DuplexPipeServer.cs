@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NetGear.Pipelines
 {
-    public abstract partial class DuplexPipeServer : IConnectionDispatcher, IDisposable
+    public abstract partial class DuplexPipeServer : IConnectionDispatcher, IHeartbeatHandler, IDisposable
     {
         protected class Client : DuplexPipe
         {
@@ -98,6 +98,7 @@ namespace NetGear.Pipelines
         protected ITransport _transport;
         private readonly ConnectionDelegate _runClientAsync;
         private readonly TaskCompletionSource<object> _stoppedTcs;
+        private Heartbeat _heartbeat;
 
         protected DuplexPipeServer()
         {
@@ -132,11 +133,12 @@ namespace NetGear.Pipelines
             };
         }
 
-        public Task StartAsync(IPEndPoint endPoint, int listenBacklog = 512)
-            => StartAsync(endPoint, listenBacklog, null, null);
+        public Task StartAsync(IPEndPoint endPoint, int listenBacklog = 512, bool isHeartbeat = false)
+            => StartAsync(endPoint, listenBacklog, isHeartbeat, null, null);
 
         public virtual async Task StartAsync(IPEndPoint endPoint,
             int listenBacklog,
+            bool isHeartbeat,
             PipeOptions outputPipeOptions,
             PipeOptions inputPipeOptions)
         {
@@ -164,6 +166,9 @@ namespace NetGear.Pipelines
                     outputPipeOptions,
                     inputPipeOptions);
             }
+
+            if (isHeartbeat)
+                (_heartbeat ?? (_heartbeat = new Heartbeat(new IHeartbeatHandler[] { this }))).Start();
 
             await _transport.BindAsync().ConfigureAwait(false);
 
