@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using NetGear.Core.Diagnostics;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Pipelines;
@@ -52,17 +54,21 @@ namespace NetGear.Core
 
         private string Name { get; }
 
+        private ILogger _logger;
+
         /// <summary>
         /// Create a new dedicated thread-pool
         /// </summary>
         public DedicatedThreadPoolPipeScheduler(string name = null, int workerCount = 5, int useThreadPoolQueueLength = 10,
-            ThreadPriority priority = ThreadPriority.Normal)
+            ThreadPriority priority = ThreadPriority.Normal,
+            ILogger logger = null)
         {
             if (workerCount < 0) throw new ArgumentNullException(nameof(workerCount));
 
             do { Id = Interlocked.Increment(ref s_nextWorkerPoolId); }
             while (Id == 0); // in case of roll-around; unlikely, though
 
+            _logger = logger;
             WorkerCount = workerCount;
             UseThreadPoolQueueLength = useThreadPoolQueueLength;
             if (string.IsNullOrWhiteSpace(name)) name = GetType().Name;
@@ -109,7 +115,7 @@ namespace NetGear.Core
                 IsBackground = true
             };
             thread.Start(this);
-            //Helpers.Incr(Counter.ThreadPoolWorkerStarted);
+            CounterHelper.Incr(Counter.ThreadPoolWorkerStarted);
         }
 
         /// <summary>
@@ -129,13 +135,13 @@ namespace NetGear.Core
                     {
                         Monitor.Pulse(_queue); // wake up someone
                     }
-                    //Helpers.Incr(Counter.ThreadPoolScheduled);
+                    CounterHelper.Incr(Counter.ThreadPoolScheduled);
                     return;
                 }
             }
 
             // fallback to thread-pool
-            //Helpers.Incr(Counter.ThreadPoolPushedToMainThreadPool);
+            CounterHelper.Incr(Counter.ThreadPoolPushedToMainThreadPool);
             ThreadPool.Schedule(action, state);
         }
 
@@ -153,12 +159,12 @@ namespace NetGear.Core
             try
             {
                 action(state);
-                //Helpers.Incr(Counter.ThreadPoolExecuted);
-                //Helpers.Incr(action == SocketAwaitableEventArgs.InvokeStateAsAction ? ((Action)state).Method : action.Method);
+                CounterHelper.Incr(Counter.ThreadPoolExecuted);
+                CounterHelper.Incr(action == SocketAwaitableEventArgs.InvokeStateAsAction ? ((Action)state).Method : action.Method);
             }
             catch (Exception ex)
             {
-                //Helpers.DebugLog(Name, ex.Message);
+                Debugger1.Instance.LogVerbose(Name, ex.Message);
             }
         }
 

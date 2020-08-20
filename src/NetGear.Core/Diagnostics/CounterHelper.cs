@@ -2,10 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace NetGear.Core.Instrument
+namespace NetGear.Core.Diagnostics
 {
     internal static class CounterHelper
     {

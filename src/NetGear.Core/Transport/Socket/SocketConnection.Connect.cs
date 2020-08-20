@@ -1,4 +1,4 @@
-﻿using NetGear.Core.Common;
+﻿using NetGear.Core.Diagnostics;
 using System;
 using System.IO.Pipelines;
 using System.Net;
@@ -54,14 +54,14 @@ namespace NetGear.Core
             using (var args = new SocketAwaitableEventArgs((connectionOptions & SocketConnectionOptions.InlineConnect) == 0 ? PipeScheduler.ThreadPool : null))
             {
                 args.RemoteEndPoint = endpoint;
-                Debugger.Log(name, $"connecting to {endpoint}...");
+                Debugger1.Instance.LogVerbose(name, $"connecting to {endpoint}...");
 
                 if (!socket.ConnectAsync(args))
                     args.Complete();
                 await args;
             }
 
-            Debugger.Log(name, "connected");
+            Debugger1.Instance.LogVerbose(name, "connected");
 
             var connection = Create(socket, sendPipeOptions, receivePipeOptions, connectionOptions, name);
 

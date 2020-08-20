@@ -1,5 +1,5 @@
 ﻿using NetGear.Core.Common;
-using NetGear.Core.Instrument;
+using NetGear.Core.Diagnostics;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -197,7 +197,7 @@ namespace NetGear.Core
                 var segment = buffer.GetArray();
                 args.SetBuffer(segment.Array, segment.Offset, segment.Count);
             }
-            Common.Debugger.Log(name, $"## {nameof(socket.ReceiveAsync)} <={buffer.Length}");
+            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.ReceiveAsync)} <={buffer.Length}");
 
             if (!socket.ReceiveAsync(args))
                 args.Complete();

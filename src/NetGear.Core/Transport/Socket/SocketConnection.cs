@@ -1,4 +1,5 @@
 ﻿using NetGear.Core.Common;
+using NetGear.Core.Diagnostics;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -301,7 +302,7 @@ namespace NetGear.Core
         [Conditional("VERBOSE")]
         private void DebugLog(string message, [CallerMemberName] string caller = null,
             [CallerLineNumber] int lineNumber = 0)
-            => Common.Debugger.Log(Name, message, $"{caller}#{lineNumber}");
+            => Debugger1.Instance.LogVerbose(Name, message, $"{caller}#{lineNumber}");
         #endregion
 
         public void Dispose()

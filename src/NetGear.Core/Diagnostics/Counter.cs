@@ -1,4 +1,4 @@
-﻿namespace NetGear.Core.Instrument
+﻿namespace NetGear.Core.Diagnostics
 {
     internal enum Counter
     {

@@ -1,5 +1,5 @@
 ﻿using NetGear.Core.Common;
-using NetGear.Core.Instrument;
+using NetGear.Core.Diagnostics;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -150,7 +150,7 @@ namespace NetGear.Core
             var bufferList = GetBufferList(args, buffer);
             args.BufferList = bufferList;
 
-            Common.Debugger.Log(name, $"## {nameof(socket.SendAsync)} {buffer.Length}");
+            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.SendAsync)} {buffer.Length}");
             if (socket.SendAsync(args))
             {
                 CounterHelper.Incr(Counter.SocketSendAsyncMultiAsync);
@@ -169,7 +169,7 @@ namespace NetGear.Core
 
             var segment = memory.GetArray();
             args.SetBuffer(segment.Array, segment.Offset, segment.Count);
-            Common.Debugger.Log(name, $"## {nameof(socket.SendAsync)} {memory.Length}");
+            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.SendAsync)} {memory.Length}");
             if (socket.SendAsync(args))
             {
                 CounterHelper.Incr(Counter.SocketSendAsyncSingleAsync);
