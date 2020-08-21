@@ -1,11 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 namespace NetGear.Core.Diagnostics
 {
-    internal class Debugger1 : ILogger
+    internal class TraceDebugger : ISocketsTrace
     {
         private readonly ILogger _logger;
 
@@ -33,9 +31,7 @@ namespace NetGear.Core.Diagnostics
         private static readonly Action<ILogger, string, Exception> _connectionReset =
             LoggerMessage.Define<string>(LogLevel.Debug, new EventId(19, nameof(ConnectionReset)), @"Connection id ""{ConnectionId}"" reset.");
 
-        public static readonly Debugger1 Instance = new Debugger1(null);
-
-        public Debugger1(ILogger logger)
+        public TraceDebugger(ILogger logger)
         {
             _logger = logger;
         }
@@ -87,25 +83,5 @@ namespace NetGear.Core.Diagnostics
         {
             _connectionResume(_logger, connectionId, null);
         }
-
-        [Conditional("VERBOSE")]
-        internal void LogVerbose(string name, string message, [CallerMemberName] string caller = null)
-        {
-#if VERBOSE
-            var thread = System.Threading.Thread.CurrentThread;
-            var threadName = thread.Name;
-            if (string.IsNullOrWhiteSpace(threadName)) threadName = thread.ManagedThreadId.ToString();
-
-            var s = $"[{threadName}, {name}, {caller}]: {message}";
-            _logger.LogDebug(s);
-#endif
-        }
-
-        public IDisposable BeginScope<TState>(TState state) => _logger.BeginScope(state);
-
-        public bool IsEnabled(LogLevel logLevel) => _logger.IsEnabled(logLevel);
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-            => _logger.Log(logLevel, eventId, state, exception, formatter);
     }
 }

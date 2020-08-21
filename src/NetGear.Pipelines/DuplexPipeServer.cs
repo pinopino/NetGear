@@ -1,4 +1,6 @@
-﻿using NetGear.Core;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NetGear.Core;
 using NetGear.Pipelines.Server;
 using System;
 using System.Buffers;
@@ -95,6 +97,7 @@ namespace NetGear.Pipelines
         private int _stopping;
         private bool _hasStarted;
         protected bool _disposed;
+        protected ILogger _logger;
         protected ITransport _transport;
         private readonly ConnectionDelegate _runClientAsync;
         private readonly TaskCompletionSource<object> _stoppedTcs;
@@ -140,7 +143,8 @@ namespace NetGear.Pipelines
             int listenBacklog,
             bool isHeartbeat,
             PipeOptions outputPipeOptions,
-            PipeOptions inputPipeOptions)
+            PipeOptions inputPipeOptions,
+            ILogger logger = null)
         {
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
@@ -149,6 +153,7 @@ namespace NetGear.Pipelines
                 throw new InvalidOperationException("server has already started");
             _hasStarted = true;
 
+            _logger = logger ?? NullLoggerFactory.Instance.CreateLogger("NetGear.Pipelines.DuplexPipeServer");
             var endPointInfo = new ListenOptions(endPoint);
             if (outputPipeOptions == null || inputPipeOptions == null)
             {

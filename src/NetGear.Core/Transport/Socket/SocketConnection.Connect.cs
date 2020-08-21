@@ -1,4 +1,6 @@
-﻿using NetGear.Core.Diagnostics;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NetGear.Core.Diagnostics;
 using System;
 using System.IO.Pipelines;
 using System.Net;
@@ -22,8 +24,9 @@ namespace NetGear.Core
             SocketConnectionOptions connectionOptions = SocketConnectionOptions.None,
             Func<SocketConnection, Task> onConnected = null,
             Socket socket = null,
-            string name = null)
-            => ConnectAsync(endpoint, pipeOptions, pipeOptions, connectionOptions, onConnected, socket, name);
+            string name = null,
+            ILogger logger = null)
+            => ConnectAsync(endpoint, pipeOptions, pipeOptions, connectionOptions, onConnected, socket, name, logger);
 
         /// <summary>
         /// Open a new or existing socket as a client
@@ -35,7 +38,8 @@ namespace NetGear.Core
             SocketConnectionOptions connectionOptions = SocketConnectionOptions.None,
             Func<SocketConnection, Task> onConnected = null,
             Socket socket = null,
-            string name = null)
+            string name = null,
+            ILogger logger = null)
         {
             var addressFamily = endpoint.AddressFamily == AddressFamily.Unspecified ?
                 AddressFamily.InterNetwork : endpoint.AddressFamily;
@@ -51,19 +55,20 @@ namespace NetGear.Core
 
             SetRecommendedClientOptions(socket);
 
+            logger = logger ?? NullLoggerFactory.Instance.CreateLogger("NetGear.Core.SocketConnection");
             using (var args = new SocketAwaitableEventArgs((connectionOptions & SocketConnectionOptions.InlineConnect) == 0 ? PipeScheduler.ThreadPool : null))
             {
                 args.RemoteEndPoint = endpoint;
-                Debugger1.Instance.LogVerbose(name, $"connecting to {endpoint}...");
+                _logger.LogVerbose(name, $"connecting to {endpoint}...");
 
                 if (!socket.ConnectAsync(args))
                     args.Complete();
                 await args;
             }
 
-            Debugger1.Instance.LogVerbose(name, "connected");
+            _logger.LogVerbose(name, "connected");
 
-            var connection = Create(socket, sendPipeOptions, receivePipeOptions, connectionOptions, name);
+            var connection = Create(socket, sendPipeOptions, receivePipeOptions, connectionOptions, name, logger);
 
             if (onConnected != null)
                 await onConnected(connection).ConfigureAwait(false);
@@ -75,19 +80,19 @@ namespace NetGear.Core
         /// Create a SocketConnection instance over an existing socket；
         /// 进出两个方向都采用完全一样的设置。通常用于客户端，服务端不会也不应该这样子搞
         /// </summary>
-        internal static SocketConnection Create(Socket socket, PipeOptions pipeOptions = null,
-            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
+        public static SocketConnection Create(Socket socket, PipeOptions pipeOptions = null,
+            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null, ILogger logger = null)
         {
-            return new SocketConnection(socket, pipeOptions, pipeOptions, socketConnectionOptions, name);
+            return new SocketConnection(socket, pipeOptions, pipeOptions, socketConnectionOptions, name, logger);
         }
 
         /// <summary>
         /// Create a SocketConnection instance over an existing socket
         /// </summary>
-        internal static SocketConnection Create(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
-            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null)
+        public static SocketConnection Create(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
+            SocketConnectionOptions socketConnectionOptions = SocketConnectionOptions.None, string name = null, ILogger logger = null)
         {
-            return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name);
+            return new SocketConnection(socket, sendPipeOptions, receivePipeOptions, socketConnectionOptions, name, logger);
         }
 
         internal static void SetFastLoopbackOption(Socket socket)

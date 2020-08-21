@@ -134,7 +134,7 @@ namespace NetGear.Core
             DebugLog(error == null ? "exiting with success" : $"exiting with failure: {error.Message}");
         }
 
-        private static void DoSend(Socket socket, SocketAwaitableEventArgs args, in ReadOnlySequence<byte> buffer, string name)
+        private void DoSend(Socket socket, SocketAwaitableEventArgs args, in ReadOnlySequence<byte> buffer, string name)
         {
             if (buffer.IsSingleSegment)
             {
@@ -150,7 +150,7 @@ namespace NetGear.Core
             var bufferList = GetBufferList(args, buffer);
             args.BufferList = bufferList;
 
-            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.SendAsync)} {buffer.Length}");
+            _logger.LogVerbose(name, $"## {nameof(socket.SendAsync)} {buffer.Length}");
             if (socket.SendAsync(args))
             {
                 CounterHelper.Incr(Counter.SocketSendAsyncMultiAsync);
@@ -162,14 +162,14 @@ namespace NetGear.Core
             }
         }
 
-        private static void DoSend(Socket socket, SocketAwaitableEventArgs args, ReadOnlyMemory<byte> memory, string name)
+        private void DoSend(Socket socket, SocketAwaitableEventArgs args, ReadOnlyMemory<byte> memory, string name)
         {
             // clear any existing buffer list
             RecycleSpareBuffer(args);
 
             var segment = memory.GetArray();
             args.SetBuffer(segment.Array, segment.Offset, segment.Count);
-            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.SendAsync)} {memory.Length}");
+            _logger.LogVerbose(name, $"## {nameof(socket.SendAsync)} {memory.Length}");
             if (socket.SendAsync(args))
             {
                 CounterHelper.Incr(Counter.SocketSendAsyncSingleAsync);

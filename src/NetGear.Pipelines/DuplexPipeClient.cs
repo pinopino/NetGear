@@ -1,9 +1,11 @@
-﻿using NetGear.Core;
+﻿using Microsoft.Extensions.Logging;
+using NetGear.Core;
 using NetGear.Core.Common;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.IO.Pipelines;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace NetGear.Pipelines
@@ -15,18 +17,19 @@ namespace NetGear.Pipelines
 
         public event Action<IMemoryOwner<byte>> Broadcast;
 
-        private DuplexPipeClient(IDuplexPipe pipe)
-            : base(pipe)
+        private DuplexPipeClient(IDuplexPipe pipe, ILogger logger = null)
+            : base(pipe, logger)
         {
             _awaitingResponses = new Dictionary<int, TaskCompletionSource<IMemoryOwner<byte>>>();
             StartReceiveLoopAsync().FireAndForget();
         }
 
-        public static async Task<DuplexPipeClient> ConnectAsync(IEndPointInformation endPoint)
+        public static async Task<DuplexPipeClient> ConnectAsync(EndPoint endPoint, ILogger logger = null)
         {
-            var socketConnection = await SocketConnection.ConnectAsync(endPoint.IPEndPoint,
-                onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"));
-            return new DuplexPipeClient(socketConnection);
+            var socketConnection = await SocketConnection.ConnectAsync(endPoint,
+                onConnected: async conn => await Console.Out.WriteLineAsync($"已连接至服务端@{endPoint}"),
+                logger: logger);
+            return new DuplexPipeClient(socketConnection, logger);
         }
 
         public ValueTask SendAsync(ReadOnlyMemory<byte> message) => WriteAsync(message, 0);

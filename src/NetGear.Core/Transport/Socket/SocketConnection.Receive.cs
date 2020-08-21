@@ -177,7 +177,7 @@ namespace NetGear.Core
             DebugLog(error == null ? "exiting with success" : $"exiting with failure: {error.Message}");
         }
 
-        private static void DoReceive(Socket socket, SocketAwaitableEventArgs args, Memory<byte> buffer, string name)
+        private void DoReceive(Socket socket, SocketAwaitableEventArgs args, Memory<byte> buffer, string name)
         {
             if (buffer.IsEmpty)
             {
@@ -197,7 +197,7 @@ namespace NetGear.Core
                 var segment = buffer.GetArray();
                 args.SetBuffer(segment.Array, segment.Offset, segment.Count);
             }
-            Debugger1.Instance.LogVerbose(name, $"## {nameof(socket.ReceiveAsync)} <={buffer.Length}");
+            _logger.LogVerbose(name, $"## {nameof(socket.ReceiveAsync)} <={buffer.Length}");
 
             if (!socket.ReceiveAsync(args))
                 args.Complete();

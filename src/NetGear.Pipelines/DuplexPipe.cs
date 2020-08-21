@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using System;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Pipelines;
@@ -9,18 +11,20 @@ namespace NetGear.Pipelines
 {
     public abstract class DuplexPipe : IDisposable
     {
+        private static ILogger _logger;
         private IDuplexPipe _pipe;
         private readonly SemaphoreSlim _singleWriter = new SemaphoreSlim(1);
 
         internal PipeReader Input { get { return _pipe.Input; } }
         internal PipeWriter Output { get { return _pipe.Output; } }
 
-        protected DuplexPipe(IDuplexPipe pipe)
+        protected DuplexPipe(IDuplexPipe pipe, ILogger logger = null)
         {
             if (pipe == null)
                 throw new ArgumentNullException(nameof(pipe));
 
             _pipe = pipe;
+            _logger = logger ?? NullLoggerFactory.Instance.CreateLogger("NetGear.Pipelines.DuplexPipe");
         }
 
         protected DuplexPipe()

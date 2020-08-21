@@ -2,15 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.Extensions.Logging;
 
 namespace NetGear.Core
 {
-    public interface ISocketsTrace : ILogger
+    public interface ISocketsTrace
     {
         void ConnectionReadFin(string connectionId);
 
-        void ConnectionWriteFin(string connectionId);
+        void ConnectionWriteFin(string connectionId, string reasion);
 
         void ConnectionError(string connectionId, Exception ex);
 

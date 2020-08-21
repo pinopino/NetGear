@@ -164,7 +164,7 @@ namespace NetGear.Core
             }
             catch (Exception ex)
             {
-                Debugger1.Instance.LogVerbose(Name, ex.Message);
+                _logger.LogVerbose(Name, ex.Message);
             }
         }
 

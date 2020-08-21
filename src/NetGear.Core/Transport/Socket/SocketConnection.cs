@@ -1,4 +1,6 @@
-﻿using NetGear.Core.Common;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NetGear.Core.Common;
 using NetGear.Core.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -102,6 +104,8 @@ namespace NetGear.Core
         private int _socketShutdownKind;
         private volatile bool _socketDisposed;
         private volatile Exception _shutdownReason;
+        private static ILogger _logger;
+        private readonly ISocketsTrace _trace;
         private readonly object _shutdownLock = new object();
 
         private string Name { get; }
@@ -128,7 +132,7 @@ namespace NetGear.Core
         public PipeShutdownKind ShutdownKind => (PipeShutdownKind)Thread.VolatileRead(ref _socketShutdownKind);
 
         private SocketConnection(Socket socket, PipeOptions sendPipeOptions, PipeOptions receivePipeOptions,
-            SocketConnectionOptions socketConnectionOptions, string name)
+            SocketConnectionOptions socketConnectionOptions, string name, ILogger logger)
         {
             if (socket == null)
                 throw new ArgumentNullException(nameof(socket));
@@ -140,6 +144,8 @@ namespace NetGear.Core
                 receivePipeOptions = PipeOptions.Default;
 
             Socket = socket;
+            _logger = logger ?? NullLoggerFactory.Instance.CreateLogger("NetGear.Core.SocketConnection");
+            _trace = new TraceDebugger(_logger);
             var localEndPoint = (IPEndPoint)Socket.LocalEndPoint;
             var remoteEndPoint = (IPEndPoint)Socket.RemoteEndPoint;
             LocalAddress = localEndPoint.Address;
@@ -302,7 +308,7 @@ namespace NetGear.Core
         [Conditional("VERBOSE")]
         private void DebugLog(string message, [CallerMemberName] string caller = null,
             [CallerLineNumber] int lineNumber = 0)
-            => Debugger1.Instance.LogVerbose(Name, message, $"{caller}#{lineNumber}");
+            => _logger.LogVerbose(Name, message, $"{caller}#{lineNumber}");
         #endregion
 
         public void Dispose()
@@ -320,5 +326,9 @@ namespace NetGear.Core
             try { _readerArgs?.Abort(); } catch { }
             try { _writerArgs?.Abort(); } catch { }
         }
+
+#if DEBUG
+        ~SocketConnection() => CounterHelper.Incr(Counter.SocketConnectionCollectedWithoutDispose);
+#endif
     }
 }

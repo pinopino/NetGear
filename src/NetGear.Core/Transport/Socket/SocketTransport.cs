@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NetGear.Core.Common;
+using NetGear.Core.Diagnostics;
 using System;
 using System.Buffers;
 using System.IO.Pipelines;
@@ -33,6 +35,7 @@ namespace NetGear.Core
         private Exception _listenException;
         private MemoryPool<byte> _pool;
         private readonly PipeOptionsPair[] _cachedPipeOpts;
+        private static ILogger _logger;
         private readonly ISocketsTrace _trace;
         private readonly IEndPointInformation _endPointInformation;
         private readonly IConnectionDispatcher _dispatcher;
@@ -41,7 +44,8 @@ namespace NetGear.Core
             IConnectionDispatcher dispatcher,
             int listenBacklog,
             int ioQueueCount,
-            MemoryPool<byte> pool = null)
+            MemoryPool<byte> pool = null,
+            ILogger logger = null)
         {
             if (endPointInformation == null)
                 throw new ArgumentNullException(nameof(endPointInformation));
@@ -56,6 +60,8 @@ namespace NetGear.Core
             _dispatcher = dispatcher;
             _backlog = listenBacklog;
             _pool = pool;
+            _logger = logger ?? NullLoggerFactory.Instance.CreateLogger("NetGear.Core.SocketTransport");
+            _trace = new TraceDebugger(_logger);
 
             if (ioQueueCount > 0)
             {
@@ -128,7 +134,7 @@ namespace NetGear.Core
                 else
                 {
                     var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
-                    _trace.LogCritical(ex, mark);
+                    _logger.LogCritical(ex, mark);
                     _listenException = new ListenLoopException(mark, ex);
 
                     // Request shutdown so we can rethrow this exception
@@ -260,7 +266,7 @@ namespace NetGear.Core
 
             if (setsockoptStatus != 0)
             {
-                _trace.LogInformation("Setting SO_REUSEADDR failed with errno '{errno}'.", Marshal.GetLastWin32Error());
+                _logger.LogInformation("Setting SO_REUSEADDR failed with errno '{errno}'.", Marshal.GetLastWin32Error());
             }
         }
     }
