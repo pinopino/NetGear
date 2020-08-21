@@ -13,11 +13,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ReverseClient", "example\Re
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetGear.Libuv", "src\NetGear.Libuv\NetGear.Libuv.csproj", "{AB9C1450-AC79-46A3-AFD3-D941EB53A028}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetGear.Pipelines", "src\NetGear.Pipelines\NetGear.Pipelines.csproj", "{987D48EE-252B-4D02-ADD9-D3D78C6E76E0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NetGear.Pipelines", "src\NetGear.Pipelines\NetGear.Pipelines.csproj", "{987D48EE-252B-4D02-ADD9-D3D78C6E76E0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReverseClient.Libuv", "example\ReverseClient.Libuv\ReverseClient.Libuv.csproj", "{8467E414-277E-4303-B8A8-21A9F89379C2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ReverseClient.Libuv", "example\ReverseClient.Libuv\ReverseClient.Libuv.csproj", "{8467E414-277E-4303-B8A8-21A9F89379C2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReverseServer.Libuv", "example\ReverseServer.Libuv\ReverseServer.Libuv.csproj", "{606EE773-3E3B-42A6-A074-4D71C87E3ED8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ReverseServer.Libuv", "example\ReverseServer.Libuv\ReverseServer.Libuv.csproj", "{606EE773-3E3B-42A6-A074-4D71C87E3ED8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NetGear.Tests", "tests\NetGear.Tests\NetGear.Tests.csproj", "{D74C3FFC-5F87-4960-963A-27E19D82B8F7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -53,6 +55,10 @@ Global
 		{606EE773-3E3B-42A6-A074-4D71C87E3ED8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{606EE773-3E3B-42A6-A074-4D71C87E3ED8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{606EE773-3E3B-42A6-A074-4D71C87E3ED8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D74C3FFC-5F87-4960-963A-27E19D82B8F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D74C3FFC-5F87-4960-963A-27E19D82B8F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D74C3FFC-5F87-4960-963A-27E19D82B8F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D74C3FFC-5F87-4960-963A-27E19D82B8F7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
