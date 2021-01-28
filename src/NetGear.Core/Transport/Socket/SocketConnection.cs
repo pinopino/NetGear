@@ -270,8 +270,6 @@ namespace NetGear.Core
             if (socket.AddressFamily == AddressFamily.Unix) return;
 
             try { socket.NoDelay = true; } catch (Exception ex) { Console.WriteLine(nameof(SocketConnection), ex.Message); }
-
-            try { SetFastLoopbackOption(socket); } catch (Exception ex) { Console.WriteLine(nameof(SocketConnection), ex.Message); }
         }
 
         /// <summary>
