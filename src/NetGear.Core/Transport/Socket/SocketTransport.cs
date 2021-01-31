@@ -105,45 +105,6 @@ namespace NetGear.Core
             _cachedPipeOpts = new PipeOptionsPair[] { new PipeOptionsPair(sendOptions, receiveOptions) };
         }
 
-        private async Task ListenForConnectionsAsync()
-        {
-            try
-            {
-                while (true)
-                {
-                    for (var i = 0; i < _numSchedulers; i++)
-                    {
-                        var clientSocket = await _listener.AcceptAsync();
-                        SocketConnection.SetRecommendedServerOptions(clientSocket);
-
-                        var connection = SocketConnection.Create(clientSocket, _cachedPipeOpts[i].SendOpts, _cachedPipeOpts[i].ReceiveOpts);
-                        _dispatcher.OnConnection(connection).FireAndForget();
-                    }
-                }
-            }
-            catch (NullReferenceException)
-            { }
-            catch (ObjectDisposedException)
-            { }
-            catch (Exception ex)
-            {
-                if (_unbinding)
-                {
-                    // Means we must be unbinding. Eat the exception.
-                }
-                else
-                {
-                    var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
-                    _logger.LogCritical(ex, mark);
-                    _listenException = new ListenLoopException(mark, ex);
-
-                    // Request shutdown so we can rethrow this exception
-                    // in Stop which should be observable.
-                    _dispatcher.StopAsync().FireAndForget(); // 说明：stop里面调用unbind，以便重新抛出异常
-                }
-            }
-        }
-
         public Task BindAsync()
         {
             if (_listener != null)
@@ -151,8 +112,7 @@ namespace NetGear.Core
 
             var endPoint = _endPointInformation.IPEndPoint;
             var listenSocket = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-            EnableRebinding(listenSocket);
+            NativeMethods.DisableHandleInheritance(listenSocket);
 
             // Kestrel expects IPv6Any to bind to both IPv6 and IPv4
             if (endPoint.Address == IPAddress.IPv6Any)
@@ -180,6 +140,58 @@ namespace NetGear.Core
             _listenTask = Task.Run(ListenForConnectionsAsync);
 
             return Task.CompletedTask;
+        }
+
+        private async Task ListenForConnectionsAsync()
+        {
+            /*
+             * 
+             * input: recv_options  
+             *  app <[reader]==============<pipe<===============[writer]< socket
+             *  
+             * output: send_options
+             *  app >[writer]==============>pipe>===============[reader]> socket
+             *  
+             */
+            try
+            {
+                while (true)
+                {
+                    for (var i = 0; i < _numSchedulers; i++)
+                    {
+                        var clientSocket = await _listener.AcceptAsync().ConfigureAwait(false);
+                        SocketConnection.SetRecommendedServerOptions(clientSocket);
+
+                        var opts = _cachedPipeOpts[i];
+                        var connection = SocketConnection.Create(clientSocket, opts.SendOpts, opts.ReceiveOpts);
+                        connection.ConnectionId = CorrelationIdGenerator.GetNextId();
+                        StartOnScheduler(opts.ReceiveOpts.ReaderScheduler,
+                            state => _dispatcher.OnConnection((TransportConnection)state),
+                            connection);
+                    }
+                }
+            }
+            catch (NullReferenceException)
+            { }
+            catch (ObjectDisposedException)
+            { }
+            catch (Exception ex)
+            {
+                if (_unbinding)
+                {
+                    // Means we must be unbinding. Eat the exception.
+                }
+                else
+                {
+                    var mark = $"Unexpected exception in {nameof(SocketTransport)}.{nameof(ListenForConnectionsAsync)}.";
+                    _logger.LogCritical(ex, mark);
+                    _listenException = new ListenLoopException(mark, ex);
+
+                    // Request shutdown so we can rethrow this exception
+                    // in Stop which should be observable.
+                    _dispatcher.StopAsync().FireAndForget(); // 说明：stop里面调用unbind，以便重新抛出异常
+                }
+            }
         }
 
         public async Task UnbindAsync()
@@ -212,7 +224,7 @@ namespace NetGear.Core
             return Task.CompletedTask;
         }
 
-        private static void Scheduler(PipeScheduler scheduler, Action<object> callback, object state)
+        private static void StartOnScheduler(PipeScheduler scheduler, Action<object> callback, object state)
         {
             if (scheduler == PipeScheduler.Inline)
                 scheduler = null;
@@ -237,37 +249,5 @@ namespace NetGear.Core
                 writerScheduler: PipeScheduler.ThreadPool,
                 useSynchronizationContext: false
             );
-
-        [DllImport("libc", SetLastError = true)]
-        private static extern int setsockopt(int socket, int level, int option_name, IntPtr option_value, uint option_len);
-
-        private const int SOL_SOCKET_OSX = 0xffff;
-        private const int SO_REUSEADDR_OSX = 0x0004;
-        private const int SOL_SOCKET_LINUX = 0x0001;
-        private const int SO_REUSEADDR_LINUX = 0x0002;
-
-        // Without setting SO_REUSEADDR on macOS and Linux, binding to a recently used endpoint can fail.
-        // https://github.com/dotnet/corefx/issues/24562
-        private unsafe void EnableRebinding(Socket listenSocket)
-        {
-            var optionValue = 1;
-            var setsockoptStatus = 0;
-
-            if (PlatformApis.IsLinux)
-            {
-                setsockoptStatus = setsockopt(listenSocket.Handle.ToInt32(), SOL_SOCKET_LINUX, SO_REUSEADDR_LINUX,
-                                              (IntPtr)(&optionValue), sizeof(int));
-            }
-            else if (PlatformApis.IsDarwin)
-            {
-                setsockoptStatus = setsockopt(listenSocket.Handle.ToInt32(), SOL_SOCKET_OSX, SO_REUSEADDR_OSX,
-                                              (IntPtr)(&optionValue), sizeof(int));
-            }
-
-            if (setsockoptStatus != 0)
-            {
-                _logger.LogInformation("Setting SO_REUSEADDR failed with errno '{errno}'.", Marshal.GetLastWin32Error());
-            }
-        }
     }
 }

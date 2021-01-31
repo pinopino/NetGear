@@ -4,7 +4,7 @@
 using System;
 using System.Threading;
 
-namespace NetGear.Pipelines.Server
+namespace NetGear.Core
 {
     internal static class CorrelationIdGenerator
     {

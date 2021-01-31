@@ -117,7 +117,7 @@ namespace NetGear.Pipelines
                 try
                 {
                     OnClientConnected(client);
-                    await client.RunAsync();
+                    await client.RunAsync().ConfigureAwait(false);
                     try { client.Input.Complete(); } catch { }
                     try { client.Output.Complete(); } catch { }
                 }
@@ -210,7 +210,6 @@ namespace NetGear.Pipelines
         // 这个方法我始终觉得不应该为public
         public Task OnConnection(TransportConnection connection)
         {
-            connection.ConnectionId = CorrelationIdGenerator.GetNextId();
             return _runClientAsync(connection);
         }
 

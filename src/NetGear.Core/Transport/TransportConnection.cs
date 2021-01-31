@@ -20,13 +20,6 @@ namespace NetGear.Core
         { }
 
         public override string ConnectionId { get; set; }
-        public virtual MemoryPool<byte> MemoryPool => throw new NotImplementedException();
-
-        public int RemotePort { get; set; }
-        public IPAddress RemoteAddress { get; set; }
-        public int LocalPort { get; set; }
-        public IPAddress LocalAddress { get; set; }
-
         public override IDictionary<object, object> Items
         {
             get
@@ -39,12 +32,17 @@ namespace NetGear.Core
                 _items = value;
             }
         }
-
-        public CancellationToken ConnectionClosed { get; set; }
+        
+        public int RemotePort { get; set; }
+        public IPAddress RemoteAddress { get; set; }
+        public int LocalPort { get; set; }
+        public IPAddress LocalAddress { get; set; }
 
         public virtual PipeReader Input { get; }
-
         public virtual PipeWriter Output { get; }
+
+        public virtual MemoryPool<byte> MemoryPool => throw new NotImplementedException();
+        public CancellationToken ConnectionClosed { get; set; }
 
         public void TickHeartbeat()
         {

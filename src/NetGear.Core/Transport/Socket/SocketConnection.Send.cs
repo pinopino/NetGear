@@ -94,13 +94,13 @@ namespace NetGear.Core
                 TrySetShutdown(PipeShutdownKind.WriteSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
                 // This should always be ignored since Shutdown() must have already been called by Abort().
-                error = null;
+                error = ex;
             }
             catch (ObjectDisposedException ex)
             {
                 TrySetShutdown(PipeShutdownKind.WriteDisposed);
                 DebugLog("fail: disposed");
-                error = null;
+                error = ex;
             }
             catch (IOException ex)
             {
@@ -112,7 +112,7 @@ namespace NetGear.Core
             {
                 TrySetShutdown(PipeShutdownKind.WriteException);
                 DebugLog($"fail: {ex.Message}");
-                error = new IOException(ex.Message, ex);
+                error = ex;
             }
             finally
             {
@@ -205,6 +205,23 @@ namespace NetGear.Core
             }
 
             return list;
+        }
+
+        private static void RecycleSpareBuffer(SocketAwaitableEventArgs args)
+        {
+            // note: the BufferList getter is much less expensive then the setter.
+            if (args?.BufferList is List<ArraySegment<byte>> list)
+            {
+                args.BufferList = null; // see #26 - don't want it being reused by the next piece of IO
+                Interlocked.Exchange(ref _spareBuffer, list);
+            }
+        }
+
+        private static List<ArraySegment<byte>> GetSpareBuffer()
+        {
+            var existing = Interlocked.Exchange(ref _spareBuffer, null);
+            existing?.Clear();
+            return existing;
         }
     }
 }

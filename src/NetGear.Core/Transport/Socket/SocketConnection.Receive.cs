@@ -124,11 +124,8 @@ namespace NetGear.Core
             {
                 TrySetShutdown(PipeShutdownKind.ReadSocketError, ex.SocketErrorCode);
                 DebugLog($"fail: {ex.SocketErrorCode}");
-                if (!_socketDisposed)
-                {
-                    // Calling Dispose after ReceiveAsync can cause an "InvalidArgument" error on *nix.
-                    error = new ConnectionAbortedException();
-                }
+                // Calling Dispose after ReceiveAsync can cause an "InvalidArgument" error on *nix.
+                error = new ConnectionAbortedException(ex.Message, ex);
             }
             catch (SocketException ex)
             {
@@ -136,14 +133,11 @@ namespace NetGear.Core
                 DebugLog($"fail: {ex.SocketErrorCode}");
                 error = ex;
             }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException ex)
             {
                 TrySetShutdown(PipeShutdownKind.ReadDisposed);
                 DebugLog($"fail: disposed");
-                if (!_socketDisposed)
-                {
-                    error = new ConnectionAbortedException();
-                }
+                error = ex;
             }
             catch (IOException ex)
             {
@@ -155,7 +149,7 @@ namespace NetGear.Core
             {
                 TrySetShutdown(PipeShutdownKind.ReadException);
                 DebugLog($"fail: {ex.Message}");
-                error = new IOException(ex.Message, ex);
+                error = ex;
             }
             finally
             {

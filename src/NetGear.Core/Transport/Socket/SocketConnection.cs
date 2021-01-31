@@ -211,6 +211,7 @@ namespace NetGear.Core
                 _shutdownReason = shutdownReason ?? new ConnectionAbortedException("The Socket transport's send/read loop completed gracefully.");
 
                 DebugLog($"shutting down socket-both");
+                // Ignore any errors from Socket.Shutdown() since we're tearing down the connection anyway.
                 try { Socket.Shutdown(SocketShutdown.Both); } catch { }
                 try { Socket.Dispose(); } catch { }
             }
@@ -281,23 +282,6 @@ namespace NetGear.Core
             if (socket.AddressFamily == AddressFamily.Unix) return;
 
             try { socket.NoDelay = true; } catch (Exception ex) { Console.WriteLine(nameof(SocketConnection), ex.Message); }
-        }
-
-        private static List<ArraySegment<byte>> GetSpareBuffer()
-        {
-            var existing = Interlocked.Exchange(ref _spareBuffer, null);
-            existing?.Clear();
-            return existing;
-        }
-
-        private static void RecycleSpareBuffer(SocketAwaitableEventArgs args)
-        {
-            // note: the BufferList getter is much less expensive then the setter.
-            if (args?.BufferList is List<ArraySegment<byte>> list)
-            {
-                args.BufferList = null; // see #26 - don't want it being reused by the next piece of IO
-                Interlocked.Exchange(ref _spareBuffer, list);
-            }
         }
 
         public override string ToString() => Name;
