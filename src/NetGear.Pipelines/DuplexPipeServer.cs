@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NetGear.Core;
-using NetGear.Pipelines.Server;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -12,9 +11,31 @@ using System.Threading.Tasks;
 
 namespace NetGear.Pipelines
 {
-    public abstract partial class DuplexPipeServer : IConnectionDispatcher, IHeartbeatHandler, IDisposable
+    public abstract partial class DuplexPipeServer : IHeartbeatHandler, IDisposable
     {
-        protected class Client : DuplexPipe
+        /// <summary>
+        /// 默认connection派发器（可以做很多文章）
+        /// </summary>
+        private sealed class DefaultConnectionDispather : IConnectionDispatcher
+        {
+            DuplexPipeServer _server;
+            public DefaultConnectionDispather(DuplexPipeServer server)
+            {
+                _server = server;
+            }
+
+            public Task OnConnection(TransportConnection connection)
+            {
+                return _server._runClientAsync(connection);
+            }
+
+            public Task StopAsync()
+            {
+                return _server.StopAsync();
+            }
+        }
+
+        protected sealed class Client : DuplexPipe
         {
             private readonly DuplexPipeServer _server;
 
@@ -99,14 +120,16 @@ namespace NetGear.Pipelines
         protected bool _disposed;
         protected ILogger _logger;
         protected ITransport _transport;
+        protected IConnectionDispatcher _dispather;
         private readonly ConnectionDelegate _runClientAsync;
         private readonly TaskCompletionSource<object> _stoppedTcs;
         private Heartbeat _heartbeat;
 
-        protected DuplexPipeServer()
+        protected DuplexPipeServer(IConnectionDispatcher dispatcher = null)
         {
             _clientReferences = new ConcurrentDictionary<long, ClientReference>();
             _stoppedTcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _dispather = dispatcher ?? new DefaultConnectionDispather(this);
 
             _runClientAsync = async conn =>
             {
@@ -116,7 +139,7 @@ namespace NetGear.Pipelines
 
                 try
                 {
-                    OnClientConnected(client);
+                    OnClientConnected(in client);
                     await client.RunAsync().ConfigureAwait(false);
                     try { client.Input.Complete(); } catch { }
                     try { client.Output.Complete(); } catch { }
@@ -125,13 +148,13 @@ namespace NetGear.Pipelines
                 {
                     try { client.Input.Complete(ex); } catch { }
                     try { client.Output.Complete(ex); } catch { }
-                    OnClientFaulted(client, ex);
+                    OnClientFaulted(in client, ex);
                 }
                 finally
                 {
                     client.Dispose();
                     RemoveClient(id);
-                    OnClientDisconnected(client);
+                    OnClientDisconnected(in client);
                 }
             };
         }
@@ -158,7 +181,7 @@ namespace NetGear.Pipelines
             if (outputPipeOptions == null || inputPipeOptions == null)
             {
                 _transport = new SocketTransport(endPointInfo,
-                    this,
+                    _dispather,
                     listenBacklog,
                     Environment.ProcessorCount * 2,
                     MemoryPool<byte>.Shared);
@@ -166,7 +189,7 @@ namespace NetGear.Pipelines
             else
             {
                 _transport = new SocketTransport(endPointInfo,
-                    this,
+                    _dispather,
                     listenBacklog,
                     outputPipeOptions,
                     inputPipeOptions);
@@ -207,12 +230,6 @@ namespace NetGear.Pipelines
             _stoppedTcs.TrySetResult(null);
         }
 
-        // 这个方法我始终觉得不应该为public
-        public Task OnConnection(TransportConnection connection)
-        {
-            return _runClientAsync(connection);
-        }
-
         /// <summary>
         /// Invoked when the server starts
         /// </summary>
@@ -231,8 +248,10 @@ namespace NetGear.Pipelines
 
         /// <summary>
         /// Invoked when a new client connects
+        /// 说明：in强调我们需要一个readonly语义。讲道理这里拿到client信息你能做任何事情，
+        /// 但是为了能让后续逻辑正常跑起来还是建议只做一些简单的记录工作即可
         /// </summary>
-        protected virtual void OnClientConnected(Client client)
+        protected virtual void OnClientConnected(in Client client)
         {
             Console.WriteLine($"新连接已建立<{client.Connection.RemoteAddress}>，当前总连接数：{ClientsCount}");
         }
@@ -240,7 +259,7 @@ namespace NetGear.Pipelines
         /// <summary>
         /// Invoked when a client has disconnected
         /// </summary>
-        protected virtual void OnClientDisconnected(Client client)
+        protected virtual void OnClientDisconnected(in Client client)
         {
             Console.WriteLine($"连接<{client.Connection.RemoteAddress}>已断开@{DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")}");
         }
@@ -248,7 +267,7 @@ namespace NetGear.Pipelines
         /// <summary>
         /// Invoked when a client has faulted
         /// </summary>
-        protected virtual void OnClientFaulted(Client client, Exception exception)
+        protected virtual void OnClientFaulted(in Client client, Exception exception)
         {
             Console.WriteLine($"连接<{client.Connection.RemoteAddress}>异常，消息：{exception.Message}");
         }

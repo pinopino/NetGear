@@ -24,7 +24,7 @@ namespace NetGear.Libuv
             if (_disposed)
                 throw new ObjectDisposedException(ToString());
 
-            _transport = new UvTransport(endPoint, this, ThreadCount, Log);
+            _transport = new UvTransport(endPoint, _dispather, ThreadCount, Log);
 
             await _transport.BindAsync();
 

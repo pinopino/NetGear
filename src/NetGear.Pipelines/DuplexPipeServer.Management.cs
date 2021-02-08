@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Threading;
 
 namespace NetGear.Pipelines
 {
@@ -24,8 +25,16 @@ namespace NetGear.Pipelines
             }
         }
 
+        private DateTimeOffset _now;
+        private long _nowTicks;
         private static long _lastConnectionId = long.MinValue;
         private readonly ConcurrentDictionary<long, ClientReference> _clientReferences;
+
+        public DateTimeOffset UtcNow => new DateTimeOffset(UtcNowTicks, TimeSpan.Zero);
+
+        public long UtcNowTicks => Volatile.Read(ref _nowTicks);
+
+        public DateTimeOffset UtcNowUnsynchronized => _now;
 
         public int ClientsCount
         {
@@ -87,6 +96,9 @@ namespace NetGear.Pipelines
 
         public void OnHeartbeat(DateTimeOffset now)
         {
+            _now = now;
+            Volatile.Write(ref _nowTicks, now.Ticks);
+
             Walk(HeartbeatCallback);
         }
 
